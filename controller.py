@@ -1,11 +1,63 @@
 import requests
 import subprocess
 import re
+import readline
+import os
+import atexit
+
+# --- TERMINAL HISTORY UPGRADE ---
+# Explicitly initialize key bindings to force the VS Code terminal to respect it
+readline.parse_and_bind('tab: complete')
+
+# Create a hidden history file in your home directory
+histfile = os.path.join(os.path.expanduser("~"), ".hazel_harness_history")
+
+# Load existing history if the file exists
+try:
+    readline.read_history_file(histfile)
+    readline.set_history_length(1000) # Keep the last 1000 commands
+except FileNotFoundError:
+    pass
+
+# Save the history automatically when you type 'exit' or close the script
+atexit.register(readline.write_history_file, histfile)
+# Set this in your LMDE 7 terminal before running: export MINIMAX_API_KEY="your_key"
+MINIMAX_API_KEY = os.environ.get("MINIMAX_API_KEY", "your_hardcoded_key_if_you_prefer")
+
+def call_minimax(prompt, context):
+    """The Cloud Brain: Swapping Ollama for MiniMax API"""
+    # Standard MiniMax API endpoint
+    url = "https://api.minimax.io/v1/text/chatcompletion_v2"
+    
+    headers = {
+        "Authorization": f"Bearer {MINIMAX_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "model": "MiniMax-M2.7", # Replace with your specific MinMax 2.7 model ID
+        "messages": [
+            {"role": "system", "content": context},
+            {"role": "user", "content": prompt}
+        ]
+    }
+    
+    try:
+        response = requests.post(url, headers=headers, json=payload)
+        response.raise_for_status()
+        
+        # Cloud APIs nest their responses slightly deeper than Ollama
+        return response.json()['choices'][0]['message']['content']
+        
+    except Exception as e:
+        # Added extended debugging to catch API key/permission errors
+        error_details = response.text if 'response' in locals() else "No response"
+        return f"[API CONNECTION ERROR: {str(e)}\nDetails: {error_details}]"
 
 def call_ollama(prompt, context):
     url = "http://localhost:11434/api/generate"
     payload = {
-        "model": "qwen2.5-coder:3b",
+        "model": "qwen2.5-coder:1.5b",
         "prompt": f"{context}\n\n{prompt}",
         "stream": False
     }
@@ -66,9 +118,14 @@ def execute_tool(command, arg, content=""):
             
     return "[SYSTEM ERROR: Unknown command]"
 
+def call_llm(prompt, context):
+    return call_minimax(prompt, context)
+
+
 # 1. System Prompt
 system_prompt = """You are Hazel, a Home Assistant expert.
 You have access to a local file system via your Harness. 
+
 
 AVAILABLE TOOLS:
 1. Read a file:
@@ -101,7 +158,7 @@ while True:
     
     conversation_history += f"\nJoachim: {user_input}\nHazel: "
     
-    current_response = call_ollama(conversation_history, system_prompt)
+    current_response = call_llm(conversation_history, system_prompt)
     print(f"Hazel: {current_response}")
     
     conversation_history += current_response
@@ -126,7 +183,7 @@ while True:
             print("\n[Harness feeding system result back to Hazel...]")
             conversation_history += f"\n{system_result}\nHazel: "
             
-            current_response = call_ollama(conversation_history, system_prompt)
+            current_response = call_llm(conversation_history, system_prompt)
             print(f"Hazel: {current_response}")
             conversation_history += current_response
         else:
