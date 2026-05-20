@@ -1,3 +1,13 @@
+Now that we have a working "Brain" (the Ollama API call), we need to give Hazel her "Hands."
+
+In the pi shell, this was done by forcing the model to output a massive JSON object. We are going to do something much more resilient: Command Parsing. We will teach Hazel a very simple text-based protocol. If she needs a file, she will just type a command like !READ /path/to/file, and your Python script will intercept it, run the bash command, and feed the text back to her.
+
+Phase 2: The Action Loop
+We are going to update controller.py to include a tool execution step and an internal feedback loop.
+
+Replace your controller.py with this updated version:
+
+Python
 import requests
 import subprocess
 import re
@@ -78,3 +88,16 @@ while True:
         
         # Save final answer to history
         conversation_history += final_response
+Why this architecture changes everything:
+The ReAct Loop (Reason and Act): When Hazel needs a file, she asks for it. The script intercepts her request, reads the file using standard Linux subprocess.run(), and automatically prompts her again with the file's contents. You don't have to copy/paste anything.
+
+Invisible Enforcement: The LLM isn't fighting a parser. It just types !READ /etc/hostname and gets the text back. If she messes up the formatting slightly, it just prints as text—it doesn't crash your whole terminal.
+
+State Memory: conversation_history is now acting as your rolling context window, allowing her to remember what you asked two steps ago.
+
+The Test
+Run this script. Once it boots up, give her this exact prompt:
+
+"Hazel, use your tool to read /etc/os-release and tell me what operating system I am running."
+
+Does the Python script intercept the command, fetch the file, and allow her to correctly identify the OS?
