@@ -1,11 +1,24 @@
+### Hazel-Controller: Autonomous ReAct Harness
+
+The final implementation of the Python controller completely decouples the reasoning engine from the shell's execution environment. By using a text-based command protocol (`!READ`, `!WRITE`) instead of forced JSON schemas, the agent can output multi-line configurations (like YAML) without triggering buffer constraints or parsing errors.
+
+#### Key Mechanisms
+
+1. **Bulletproof Parsing:** Uses `re.DOTALL` to capture multi-line code blocks wrapped in `~~~`, effectively bypassing UI rendering bugs and ignoring minor formatting inconsistencies.
+2. **The Autonomous Inner Loop:** A nested `while` loop that intercepts tool requests, executes local bash commands, and silently feeds the output back into the context window. This creates a true ReAct (Reason and Act) loop, allowing the agent to chain multiple read/write actions until the task is fully resolved.
+
+#### The Working Code (`controller.py`)
+
+```python
 import requests
 import subprocess
 import re
+import os
 
 def call_ollama(prompt, context):
     url = "http://localhost:11434/api/generate"
     payload = {
-        "model": "qwen2.5-coder:7b", 
+        "model": "qwen2.5-coder:7b",
         "prompt": f"{context}\n\n{prompt}",
         "stream": False
     }
@@ -32,8 +45,8 @@ def execute_tool(command, arg, content=""):
             
     elif command == "!WRITE":
         try:
-            # Writes the parsed Markdown content directly to the disk
             safe_path = arg.strip()
+            # Explicit file writes; verify absolute paths if using SSH/containerized terminals
             with open(safe_path, 'w') as f:
                 f.write(content.strip())
             return f"[SYSTEM OUTPUT: Successfully wrote {len(content)} characters to {safe_path}]"
@@ -42,8 +55,7 @@ def execute_tool(command, arg, content=""):
             
     return "[SYSTEM ERROR: Unknown command]"
 
-# 1. System Prompt establishes the rules of the new harness
-# (Using tildes ~~~ instead of backticks to prevent UI rendering bugs)
+# 1. System Prompt establishes the rules of the harness
 system_prompt = """You are Hazel, a Home Assistant expert.
 You have access to a local file system via your Harness. 
 
@@ -65,7 +77,7 @@ RULES:
 
 conversation_history = ""
 
-print("Hazel-Harness v1.1 initialized. Type 'exit' to quit.")
+print("Hazel-Harness initialized. Type 'exit' to quit.")
 
 while True:
     user_input = input("\nJoachim: ")
@@ -79,13 +91,14 @@ while True:
     
     conversation_history += current_response
     
-    # 3. The Autonomous Tool Loop
+    # 3. The Autonomous Tool Loop (ReAct)
     while True:
         system_result = None
         
-        # Check for !READ command
+        # Check for !READ command (stops at end of line)
         read_match = re.search(r'!(READ)\s+([^\n]+)', current_response)
-        # Check for !WRITE command
+        
+        # Check for !WRITE command (bulletproof multi-line capture)
         write_match = re.search(r'!(WRITE)\s+([^\n]+)\n+~~~[^\n]*\n(.*?)~~~', current_response, re.DOTALL)
         
         if write_match:
@@ -104,11 +117,12 @@ while True:
             print(f"\n[Harness feeding system result back to Hazel...]")
             conversation_history += f"\n{system_result}\nHazel: "
             
-            # Hazel processes the tool output and generates her next response
+            # Agent processes the tool output and generates next action
             current_response = call_ollama(conversation_history, system_prompt)
             print(f"Hazel: {current_response}")
             conversation_history += current_response
         else:
-            # If no tools were found in the response, she is done thinking.
-            # Break the inner loop and wait for Joachim's next input.
-            break
+            # Task complete; return control to user
+            break 
+
+```

@@ -1,0 +1,1 @@
+"Hazel, use your !READ tool to look at /mnt/ha_config/automations.yaml. Find the broken water boiler automation with the conflicting time condition. Once you find it, use your !WRITE tool to save the corrected YAML block to /tmp/boiler_fix_test.yaml."
