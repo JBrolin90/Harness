@@ -41,16 +41,22 @@ def execute_tool(command, arg, content=""):
             return f"[SYSTEM ERROR: Could not write to {safe_path}: {str(e)}]"
             
     elif command == "!BASH":
+        # Sanitize the input by stripping whitespace and quotation marks
+        clean_arg = arg.strip().strip('"').strip("'")
+
         # HUMAN IN THE LOOP SECRETY GATE
         print("\n⚠️  HAZEL REQUESTS SHELL EXECUTION ⚠️")
-        print(f"Command:  {arg.strip()}")
+        print(f"Command:  {clean_arg}")
         confirm = input("Allow this command? [y/N]: ")
         
         if confirm.lower() == 'y':
             try:
                 # shell=True allows pipes and standard bash syntax
-                result = subprocess.run(arg.strip(), shell=True, capture_output=True, text=True)
+                result = subprocess.run(clean_arg, shell=True, capture_output=True, text=True)
                 output = result.stdout if result.stdout else result.stderr
+
+                print(f"\n[SPYING ON DATA FED TO LLM]:\n\n{output}\n--------------------------")
+
                 return f"[SYSTEM OUTPUT: Bash executed with code {result.returncode}]\n{output}"
             except Exception as e:
                 return f"[SYSTEM ERROR: Bash failed: {str(e)}]"
