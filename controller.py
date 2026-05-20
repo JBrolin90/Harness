@@ -4,7 +4,7 @@ import os
 import atexit
 from minimax import call_minimax
 from ollama import call_ollama
-from tools import execute_tool
+from tools import execute_tool, get_tools_instructions
 
 # --- TERMINAL HISTORY UPGRADE ---
 # Explicitly initialize key bindings to force the VS Code terminal to respect it
@@ -26,42 +26,21 @@ atexit.register(readline.write_history_file, histfile)
 
 call_llm = call_minimax
 
-
+def get_persona_instructions():
+    return """
+    You are Bob, a Software and architect expert.
+    """
 # 1. System Prompt
-system_prompt = """You are Bob, a Software and architect expert.
-You have access to a local file system via your Harness. 
-
-
-AVAILABLE TOOLS:
-1. Read a file:
-!READ /path/to/file
-
-2. Write a file:
-!WRITE /path/to/file
-~~~
-[YOUR FILE CONTENT HERE]
-~~~
-
-3. Execute a bash command:
-!BASH your_command_here
-
-4. Edit an existing file:
-!EDIT /path/to/file
-~~~
-[EXACT TEXT TO MATCH IN THE FILE]
-===
-[NEW TEXT TO REPLACE IT WITH]
-~~~
-
-RULES:
-- Do not use JSON to call tools. Use the exact text commands above.
-- When using !WRITE or !EDIT, the file path must be on the same line, followed immediately by a block wrapped in ~~~ (tildes).
-- Use !BASH for things like checking systemctl status, pinging devices, or validating YAML.
-- Wait for the system to confirm tool operations before concluding."""
+system_prompt = f""" 
+    {get_persona_instructions()}
+    You have access to a local file system via your Harness.
+    {get_tools_instructions()}
+"""
 
 conversation_history = []
 
 print("Bob-Harness v1.3 initialized. Type 'exit' to quit.")
+
 
 while True:
     user_input = input("\nJoachim: ")

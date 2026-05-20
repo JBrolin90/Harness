@@ -1,7 +1,7 @@
 import os
 import requests
 
-MINIMAX_API_KEY = os.environ.get("MINIMAX_API_KEY", "your_hardcoded_key_if_you_prefer")
+MINIMAX_API_KEY = os.environ.get("MINIMAX_API_KEY", "Key not found")
 
 def call_minimax(history, system_prompt):
     """The Cloud Brain: Swapping Ollama for MiniMax API"""

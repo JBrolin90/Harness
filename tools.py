@@ -2,6 +2,35 @@
 import subprocess
 import os
 
+def get_tools_instructions():
+    return """
+        AVAILABLE TOOLS:
+        1. Read a file:
+        !READ /path/to/file
+
+        2. Write a file:
+        !WRITE /path/to/file
+        ~~~
+        [YOUR FILE CONTENT HERE]
+        ~~~
+
+        3. Execute a bash command:
+        !BASH your_command_here
+
+        4. Edit an existing file:
+        !EDIT /path/to/file
+        ~~~
+        [EXACT TEXT TO MATCH IN THE FILE]
+        ===
+        [NEW TEXT TO REPLACE IT WITH]
+        ~~~
+    
+        RULES:
+        - Do not use JSON to call tools. Use the exact text commands above.
+        - When using !WRITE or !EDIT, the file path must be on the same line, followed immediately by a block wrapped in ~~~ (tildes).
+        - Use !BASH for things like checking systemctl status, pinging devices, or validating YAML.
+        - Wait for the system to confirm tool operations before concluding.
+    """
 
 def execute_tool(command, arg, content=""):
     """The 'Hands': Executes local commands based on LLM requests."""
