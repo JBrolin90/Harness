@@ -55,6 +55,30 @@ def call_minimax(prompt, context):
         return f"[API CONNECTION ERROR: {str(e)}\nDetails: {error_details}]"
 
 def call_ollama(prompt, context):
+    """The Local Brain: Upgraded to the structured Chat endpoint"""
+    url = "http://localhost:11434/api/chat"
+    
+    payload = {
+        "model": "qwen2.5-coder:7b",
+        "messages": [
+            {"role": "system", "content": context},
+            {"role": "user", "content": prompt}
+        ],
+        "stream": False
+    }
+    
+    try:
+        response = requests.post(url, json=payload)
+        response.raise_for_status()
+        
+        # The chat endpoint nests the response under ['message']['content']
+        return response.json()['message']['content']
+        
+    except Exception as e:
+        return f"[API CONNECTION ERROR: {str(e)}]"
+
+
+def call_ollama_simple(prompt, context):
     url = "http://localhost:11434/api/generate"
     payload = {
         "model": "qwen2.5-coder:1.5b",
@@ -147,29 +171,29 @@ RULES:
 - Wait for the system to confirm tool operations before concluding.
 """
 
-conversation_history = ""
+conversation_history = []
 
-print("Hazel-Harness v1.2 initialized. Type 'exit' to quit.")
+print("Hazel-Harness v1.3 initialized. Type 'exit' to quit.")
 
 while True:
     user_input = input("\nJoachim: ")
     if user_input.lower() == "exit": 
         break
     
-    conversation_history += f"\nJoachim: {user_input}\nHazel: "
+    conversation_history.append( {"role": "user", "content": user_input} )
     
-    current_response = call_llm(conversation_history, system_prompt)
-    print(f"Hazel: {current_response}")
+    response = call_llm(conversation_history, system_prompt)
+    print(f"Hazel: {response}")
     
-    conversation_history += current_response
+    conversation_history.append( {"role": "assistant", "content": response})
     
     # 3. The Autonomous Tool Loop (ReAct)
     while True:
         system_result = None
         
-        read_match = re.search(r'!(READ)\s+([^\n]+)', current_response)
-        bash_match = re.search(r'!(BASH)\s+([^\n]+)', current_response)
-        write_match = re.search(r'!(WRITE)\s+([^\n]+)\n+~~~[^\n]*\n(.*?)~~~', current_response, re.DOTALL)
+        read_match = re.search(r'!(READ)\s+([^\n]+)', response)
+        bash_match = re.search(r'!(BASH)\s+([^\n]+)', response)
+        write_match = re.search(r'!(WRITE)\s+([^\n]+)\n+~~~[^\n]*\n(.*?)~~~', response, re.DOTALL)
         
         if write_match:
             system_result = execute_tool("!WRITE", write_match.group(2), write_match.group(3))
@@ -183,8 +207,8 @@ while True:
             print("\n[Harness feeding system result back to Hazel...]")
             conversation_history += f"\n{system_result}\nHazel: "
             
-            current_response = call_llm(conversation_history, system_prompt)
-            print(f"Hazel: {current_response}")
-            conversation_history += current_response
+            response = call_llm(conversation_history, system_prompt)
+            print(f"Hazel: {response}")
+            conversation_history += response
         else:
             break
