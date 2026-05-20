@@ -38,19 +38,26 @@ AVAILABLE TOOLS:
 
 2. Write a file:
 !WRITE /path/to/file
-~~~yaml
+~~~
 [YOUR FILE CONTENT HERE]
 ~~~
 
 3. Execute a bash command:
 !BASH your_command_here
 
+4. Edit an existing file:
+!EDIT /path/to/file
+~~~
+[EXACT TEXT TO MATCH IN THE FILE]
+===
+[NEW TEXT TO REPLACE IT WITH]
+~~~
+
 RULES:
 - Do not use JSON to call tools. Use the exact text commands above.
-- When using !WRITE, the file path must be on the same line, followed immediately by a block wrapped in ~~~ (tildes).
+- When using !WRITE or !EDIT, the file path must be on the same line, followed immediately by a block wrapped in ~~~ (tildes).
 - Use !BASH for things like checking systemctl status, pinging devices, or validating YAML.
-- Wait for the system to confirm tool operations before concluding.
-"""
+- Wait for the system to confirm tool operations before concluding."""
 
 conversation_history = []
 
@@ -68,28 +75,42 @@ while True:
     
     conversation_history.append( {"role": "assistant", "content": response})
     
-    # 3. The Autonomous Tool Loop (ReAct)
+# 3. The Autonomous Tool Loop (ReAct)
     while True:
         system_result = None
         
-        read_match = re.search(r'!(READ)\s+([^\n]+)', response)
-        bash_match = re.search(r'!(BASH)\s+([^\n]+)', response)
-        write_match = re.search(r'!(WRITE)\s+([^\n]+)\n+~~~[^\n]*\n(.*?)~~~', response, re.DOTALL)
+        # More forgiving regexes (using .+? to handle stray spaces before the newline)
+        read_match = re.search(r'!(READ)\s+(.+)', response)
+        bash_match = re.search(r'!(BASH)\s+(.+)', response)
+        write_match = re.search(r'!(WRITE)\s+(.+?)\n~~~.*?\n(.*?)~~~', response, re.DOTALL)
+        edit_match = re.search(r'!(EDIT)\s+(.+?)\n~~~.*?\n(.*?)~~~', response, re.DOTALL)
         
         if write_match:
             system_result = execute_tool("!WRITE", write_match.group(2), write_match.group(3))
+        elif edit_match:
+            system_result = execute_tool("!EDIT", edit_match.group(2), edit_match.group(3))
         elif read_match:
             system_result = execute_tool("!READ", read_match.group(2))
         elif bash_match:
             system_result = execute_tool("!BASH", bash_match.group(2))
             
+        # --- THE SYNTAX CATCHERS ---
+        # If Bob tried to use a tool but the regex failed, tell him to fix it!
+        elif "!EDIT" in response and not edit_match:
+            system_result = "[SYSTEM ERROR: You attempted to use !EDIT but the syntax was invalid. Ensure the file path is on the first line, followed by ~~~, then the search block, then ===, then the replace block, then ~~~.]"
+        elif "!WRITE" in response and not write_match:
+            system_result = "[SYSTEM ERROR: You attempted to use !WRITE but the syntax was invalid. Ensure you wrap the code block in ~~~.]"
+        # ---------------------------
+
         # Feed it back to the loop
         if system_result:
             print("\n[Harness feeding system result back to Bob...]")
-            conversation_history += f"\n{system_result}\nBob: "
+            
+            conversation_history.append({"role": "user", "content": system_result})
             
             response = call_llm(conversation_history, system_prompt)
             print(f"Bob: {response}")
-            conversation_history += response
+            
+            conversation_history.append({"role": "assistant", "content": response})
         else:
             break

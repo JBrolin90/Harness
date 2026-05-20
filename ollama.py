@@ -1,15 +1,14 @@
 import requests
 
-def call_ollama(prompt, context):
+def call_ollama(history, system_prompt):
     """The Local Brain: Upgraded to the structured Chat endpoint"""
     url = "http://localhost:11434/api/chat"
     
+    messages = [{"role": "system", "content": system_prompt}] + history
+    
     payload = {
         "model": "qwen2.5-coder:7b",
-        "messages": [
-            {"role": "system", "content": context},
-            {"role": "user", "content": prompt}
-        ],
+        "messages": messages,
         "stream": False
     }
     
@@ -17,12 +16,10 @@ def call_ollama(prompt, context):
         response = requests.post(url, json=payload)
         response.raise_for_status()
         
-        # The chat endpoint nests the response under ['message']['content']
         return response.json()['message']['content']
         
     except Exception as e:
         return f"[API CONNECTION ERROR: {str(e)}]"
-
 
 def call_ollama_simple(prompt, context):
     url = "http://localhost:11434/api/generate"

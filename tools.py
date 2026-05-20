@@ -1,5 +1,6 @@
 
 import subprocess
+import os
 
 
 def execute_tool(command, arg, content=""):
@@ -50,4 +51,36 @@ def execute_tool(command, arg, content=""):
             print("[❌ Execution denied by user.]")
             return "[SYSTEM ERROR: The user denied permission to execute this bash command. You must try a different approach.]"
             
+    elif command == "!EDIT":
+        print(f"\n[🔧 Harness executing: {command} on {arg}]")
+        try:
+            safe_path = arg.strip()
+            if not os.path.exists(safe_path):
+                return f"[SYSTEM ERROR: File {safe_path} not found.]"
+            
+            # Split content into search and replace blocks using the === delimiter
+            parts = content.split('\n===\n')
+            if len(parts) != 2:
+                return "[SYSTEM ERROR: Invalid edit format. Must contain exactly one '===' separator on its own line.]"
+            
+            search_block = parts[0]
+            replace_block = parts[1]
+            
+            with open(safe_path, 'r') as f:
+                file_content = f.read()
+            
+            if search_block not in file_content:
+                return "[SYSTEM ERROR: Search block not found in file. Edit aborted to prevent data corruption. Ensure the text matches exactly.]"
+            
+            # Replace only the first occurrence for safety
+            new_content = file_content.replace(search_block, replace_block, 1)
+            
+            with open(safe_path, 'w') as f:
+                f.write(new_content)
+                
+            return f"[SYSTEM OUTPUT: Successfully edited {safe_path}]"
+        except Exception as e:
+            return f"[SYSTEM ERROR: Could not edit {safe_path}: {str(e)}]"
     return "[SYSTEM ERROR: Unknown command]"
+
+
