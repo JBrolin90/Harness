@@ -1,11 +1,33 @@
+This is where the harness goes from being a smart text editor to a fully functional Sysadmin. By giving Hazel the ability to run bash commands, she can restart Home Assistant, tail your `dnsmasq` logs, or ping your offline Roomba directly.
+
+However, we need to talk about **Agentic Security**.
+
+Giving an autonomous `while` loop the ability to execute arbitrary shell commands on your host system is inherently dangerous. If Hazel hallucinates a syntax error, or worse, decides she needs to `rm -rf` a temporary directory and gets the path wrong, she will execute it instantly.
+
+To build this responsibly, we are going to introduce a core concept of enterprise agent design: **Human-in-the-Loop (HITL) authorization for destructive actions.**
+
+We will add the `!BASH` tool, but we will hard-code a safety pause into the Python script. When she asks to run a command, the script will pause, show you the command, and wait for your `[y/N]` approval before pulling the trigger.
+
+### The Upgraded Hazel Controller (v1.2)
+
+Here is the complete, updated `controller.py`.
+
+**Key Changes:**
+
+1. Added the `!BASH` command to `execute_tool` with a `shell=True` subprocess and an explicit `input()` confirmation.
+2. Updated the `system_prompt` to teach her how to use it.
+3. Added a new regex `bash_match` to the main loop.
+
+```python
 import requests
 import subprocess
 import re
+import os
 
 def call_ollama(prompt, context):
     url = "http://localhost:11434/api/generate"
     payload = {
-        "model": "qwen2.5-coder:3b",
+        "model": "qwen2.5-coder:7b",
         "prompt": f"{context}\n\n{prompt}",
         "stream": False
     }
@@ -42,7 +64,7 @@ def execute_tool(command, arg, content=""):
             
     elif command == "!BASH":
         # HUMAN IN THE LOOP SECRETY GATE
-        print("\n⚠️  HAZEL REQUESTS SHELL EXECUTION ⚠️")
+        print(f"\n⚠️  HAZEL REQUESTS SHELL EXECUTION ⚠️")
         print(f"Command:  {arg.strip()}")
         confirm = input("Allow this command? [y/N]: ")
         
@@ -90,8 +112,7 @@ print("Hazel-Harness v1.2 initialized. Type 'exit' to quit.")
 
 while True:
     user_input = input("\nJoachim: ")
-    if user_input.lower() == "exit": 
-        break
+    if user_input.lower() == "exit": break
     
     conversation_history += f"\nJoachim: {user_input}\nHazel: "
     
@@ -117,11 +138,21 @@ while True:
             
         # Feed it back to the loop
         if system_result:
-            print("\n[Harness feeding system result back to Hazel...]")
+            print(f"\n[Harness feeding system result back to Hazel...]")
             conversation_history += f"\n{system_result}\nHazel: "
             
             current_response = call_ollama(conversation_history, system_prompt)
             print(f"Hazel: {current_response}")
             conversation_history += current_response
         else:
-            break
+            break 
+
+```
+
+### The Test
+
+Run the script and try throwing her a real Sysadmin challenge.
+
+> "Hazel, use your new bash tool to ping my Roomba at `192.168.33.128` just once (`-c 1`) and tell me if it's reachable."
+
+She should parse the command, the script will pause and ask for your `y/N` approval, and then it will feed the ping results right back into her context window. How does the execution loop feel with that safety switch installed?
