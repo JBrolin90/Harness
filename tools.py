@@ -97,26 +97,43 @@ def execute_tool(command, arg, content=""):
     elif command == "!BASH":
         # Sanitize the input by stripping whitespace and quotation marks
         clean_arg = arg.strip().strip('"').strip("'")
+        
+        # Hardcoded whitelist for safe commands
+        safe_commands_whitelist = ["ls", "cd", "find", "cat", "grep", "pwd", "du", "head", "tail", "wc", "stat", "diff"]
+        
+        # Extract the first word of the command to check against the whitelist
+        first_command_word = clean_arg.split(' ')[0]
 
-        # HUMAN IN THE LOOP SECRETY GATE
-        print("\n⚠️  Bob REQUESTS SHELL EXECUTION ⚠️")
-        print(f"Command:  {clean_arg}")
-        confirm = input("Allow this command? [y/N]: ")
-
-        if confirm.lower() == 'y':
+        # Check if the command is in the whitelist
+        if first_command_word in safe_commands_whitelist:
+            print(f"\n[🔧 Harness executing whitelisted !BASH command: {clean_arg}]")
             try:
-                # shell=True allows pipes and standard bash syntax
                 result = subprocess.run(clean_arg, shell=True, capture_output=True, text=True)
                 output = (result.stdout + result.stderr).strip()
-
                 print(f"\n[SPYING ON DATA FED TO LLM]:\n\n{output}\n--------------------------")
-
                 return f"[SYSTEM OUTPUT: Bash executed with code {result.returncode}]\n{output}"
             except Exception as e:
                 return f"[SYSTEM ERROR: Bash failed: {str(e)}]"
         else:
-            print("[❌ Execution denied by user.]")
-            return "[SYSTEM ERROR: The user denied permission to execute this bash command. You must try a different approach.]"
+            # HUMAN IN THE LOOP SECURITY GATE for non-whitelisted commands
+            print("\n⚠️  Bob REQUESTS SHELL EXECUTION ⚠️")
+            print(f"Command:  {clean_arg}")
+            confirm = input("Allow this command? [y/N]: ")
+
+            if confirm.lower() == 'y':
+                try:
+                    # shell=True allows pipes and standard bash syntax
+                    result = subprocess.run(clean_arg, shell=True, capture_output=True, text=True)
+                    output = (result.stdout + result.stderr).strip()
+
+                    print(f"\n[SPYING ON DATA FED TO LLM]:\n\n{output}\n--------------------------")
+
+                    return f"[SYSTEM OUTPUT: Bash executed with code {result.returncode}]\n{output}"
+                except Exception as e:
+                    return f"[SYSTEM ERROR: Bash failed: {str(e)}]"
+            else:
+                print("[❌ Execution denied by user.]")
+                return "[SYSTEM ERROR: The user denied permission to execute this bash command. You must try a different approach.]"
 
     elif command == "!LS":
         print(f"\n[🔧 Harness executing: {command} on {arg}]")
