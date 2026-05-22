@@ -15,7 +15,10 @@ def get_tools_instructions():
         3. Execute a bash command:
         !BASH your_command_here
 
-        4. Edit an existing file:
+        4. List files in a directory:
+        !LS /path/to/directory
+
+        5. Edit an existing file:
         !EDIT /path/to/file
         <<<SEARCH_BLOCK>>>[EXACT text to find]<<<REPLACE_BLOCK>>>[EXACT replacement text]<<<
         IMPORTANT: The text inside <<<SEARCH_BLOCK>>> and <<<REPLACE_BLOCK>>> must be EXACTLY what you want to find/replace. Do NOT add extra newlines or spaces for formatting unless they are part of the text you are searching for or replacing. For example, if you want to replace "original" with "updated", the format should be:
@@ -104,7 +107,7 @@ def execute_tool(command, arg, content=""):
             try:
                 # shell=True allows pipes and standard bash syntax
                 result = subprocess.run(clean_arg, shell=True, capture_output=True, text=True)
-                output = result.stdout if result.stdout else result.stderr
+                output = (result.stdout + result.stderr).strip()
 
                 print(f"\n[SPYING ON DATA FED TO LLM]:\n\n{output}\n--------------------------")
 
@@ -114,6 +117,18 @@ def execute_tool(command, arg, content=""):
         else:
             print("[❌ Execution denied by user.]")
             return "[SYSTEM ERROR: The user denied permission to execute this bash command. You must try a different approach.]"
+
+    elif command == "!LS":
+        print(f"\n[🔧 Harness executing: {command} on {arg}]")
+        try:
+            validated_path = _validate_path(arg.strip())
+            if not os.path.exists(validated_path):
+                return f"[SYSTEM ERROR: Directory {validated_path} not found.]"
+            files = os.listdir(validated_path)
+            files.sort()
+            return f"[SYSTEM OUTPUT: Files in {validated_path}]\n" + "\n".join(files)
+        except Exception as e:
+            return f"[SYSTEM ERROR: {str(e)}]"
 
     elif command == "!EDIT":
         print(f"\n[🔧 Harness executing: {command} on {arg}]")

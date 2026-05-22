@@ -56,7 +56,8 @@ while True:
             "!WRITE": r'^\s*!(WRITE)\s+(\S+)',
             "!EDIT":  r'^\s*!(EDIT)\s+(\S+)',
             "!READ":  r'^\s*!(READ)\s+(\S+)',
-            "!BASH":  r'^\s*!(BASH)\s+(.+)'
+            "!BASH":  r'^\s*!(BASH)\s+(.+)',
+            "!LS":    r'^\s*!(LS)\s+(\S+)'
         }
 
         # Find all matches and their starting positions
