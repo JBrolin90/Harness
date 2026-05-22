@@ -2,7 +2,7 @@ import controller
 
 controller.init()
 
-print(f"Bob-Harness v1.4 initialized. Brain: {controller.current_provider.name} ({controller.current_provider.model})")
+print(f"Bob-Harness v1.5 initialized. \nBrain: \n  {controller.current_provider.name} \n  ({controller.current_provider.model})")
 print("Type 'exit' to quit.")
 
 while True:
