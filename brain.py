@@ -25,7 +25,7 @@ def call_llm(history, system_prompt, config: ProviderConfig):
     }
     
     try:
-        response = requests.post(config.url, headers=headers, json=payload, timeout=90) # Increased to 90-second timeout
+        response = requests.post(config.url, headers=headers, json=payload, timeout=180) 
         response.raise_for_status()
         data = response.json()
         
