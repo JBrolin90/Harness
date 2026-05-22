@@ -4,7 +4,8 @@ def call_ollama(history, system_prompt):
     """The Local Brain: Upgraded to the structured Chat endpoint"""
     url = "http://localhost:11434/api/chat"
     
-    messages = [{"role": "system", "content": system_prompt}] + history
+    messages = [{"role": "system", "content": system_prompt}]
+    messages += history
     
     payload = {
         "model": "qwen2.5-coder:7b",

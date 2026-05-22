@@ -1,6 +1,6 @@
-
 import subprocess
 import os
+import re
 
 def get_tools_instructions():
     return """
@@ -8,54 +8,89 @@ def get_tools_instructions():
         1. Read a file:
         !READ /path/to/file
 
-        2. Write a file:
+        2. Write a NEW file:
         !WRITE /path/to/file
-        ~~~
-        [YOUR FILE CONTENT HERE]
-        ~~~
-
+        <<<WRITE_BLOCK>>>[FILE CONTENT]<<<
+        
         3. Execute a bash command:
         !BASH your_command_here
 
         4. Edit an existing file:
         !EDIT /path/to/file
-        ~~~
-        [EXACT TEXT TO MATCH IN THE FILE]
-        ===
-        [NEW TEXT TO REPLACE IT WITH]
-        ~~~
-    
+        <<<SEARCH_BLOCK>>>[EXACT text to find]<<<REPLACE_BLOCK>>>[EXACT replacement text]<<<
+        IMPORTANT: The text inside <<<SEARCH_BLOCK>>> and <<<REPLACE_BLOCK>>> must be EXACTLY what you want to find/replace. Do NOT add extra newlines or spaces for formatting unless they are part of the text you are searching for or replacing. For example, if you want to replace "original" with "updated", the format should be:
+        <<<SEARCH_BLOCK>>>original<<<REPLACE_BLOCK>>>updated<<<
+        NOT:
+        <<<SEARCH_BLOCK>>>
+        original
+        <<<REPLACE_BLOCK>>>
+        updated
+        <<<
+
         RULES:
         - Do not use JSON to call tools. Use the exact text commands above.
-        - When using !WRITE or !EDIT, the file path must be on the same line, followed immediately by a block wrapped in ~~~ (tildes).
+        - For !WRITE, you MUST include the <<<WRITE_BLOCK>>> keyword. For !EDIT, you MUST include <<<SEARCH_BLOCK>>> and <<<REPLACE_BLOCK>>>. Every block must be closed with a final <<<.
         - Use !BASH for things like checking systemctl status, pinging devices, or validating YAML.
         - Wait for the system to confirm tool operations before concluding.
+        - You are an AUTONOMOUS agent. Do not ask the user for confirmation after a tool call; the Harness will provide the output automatically.
+        - Use relative paths based on the provided Working Directory unless an absolute path is required.
+        - The single newline immediately following <<<WRITE_BLOCK>>> and the single newline immediately preceding the closing <<< are considered visual padding and are STRIPPED. To start or end a file with an intentional newline, add an extra one.
+        - IMPORTANT: Only perform ONE tool call per response. Wait for the system output before proceeding to the next step.
     """
+
+def _validate_path(file_path: str) -> str:
+    """
+    Validates that the given file_path is within the current working directory
+    or a subdirectory thereof, and returns its absolute, normalized path.
+    Raises ValueError if the path is outside the allowed directory.
+    """
+    current_working_directory = os.getcwd()
+    abs_path = os.path.abspath(os.path.join(current_working_directory, file_path))
+
+    if not abs_path.startswith(current_working_directory):
+        raise ValueError(f"Access denied: Path '{file_path}' is outside the allowed working directory.")
+
+    return abs_path
+
+def _strip_visual_newlines(text):
+    """Removes at most one leading and one trailing newline added by LLMs for 'visual clarity'."""
+    if text.startswith('\n'): 
+        text = text[1:]
+    if text.endswith('\n'): 
+        text = text[:-1]
+    return text
+
 
 def execute_tool(command, arg, content=""):
     """The 'Hands': Executes local commands based on LLM requests."""
-    
+
     if command == "!READ":
         print(f"\n[🔧 Harness executing: {command} on {arg}]")
         try:
-            result = subprocess.run(["cat", arg.strip()], capture_output=True, text=True)
-            if result.returncode == 0:
-                return f"[SYSTEM OUTPUT: Content of {arg}]\n{result.stdout}"
-            else:
-                return f"[SYSTEM ERROR: Could not read {arg}]\n{result.stderr}"
+            validated_path = _validate_path(arg.strip())
+            with open(validated_path, 'r') as f:
+                content = f.read()
+            return f"[SYSTEM OUTPUT: Content of {validated_path}]\n{content}"
         except Exception as e:
             return f"[SYSTEM ERROR: {str(e)}]"
-            
+
+
     elif command == "!WRITE":
         print(f"\n[🔧 Harness executing: {command} on {arg}]")
         try:
-            safe_path = arg.strip()
-            with open(safe_path, 'w') as f:
-                f.write(content.strip())
-            return f"[SYSTEM OUTPUT: Successfully wrote {len(content)} characters to {safe_path}]"
+            validated_path = _validate_path(arg.strip())
+            # Parse new delimiter-based format: content is exactly between markers
+            content_match = re.search(r'<<<WRITE_BLOCK>>>(.*?)(?:<<<|>>>)', content, re.DOTALL)
+            if content_match:
+                write_content = _strip_visual_newlines(content_match.group(1))
+            else:
+                return "[SYSTEM ERROR: Invalid !WRITE format. Use <<<WRITE_BLOCK>>> markers.]"
+            with open(validated_path, 'w') as f:
+                f.write(write_content)
+            return f"[SYSTEM OUTPUT: Successfully wrote {len(write_content)} characters to {validated_path}]"
         except Exception as e:
-            return f"[SYSTEM ERROR: Could not write to {safe_path}: {str(e)}]"
-            
+            return f"[SYSTEM ERROR: Could not write to {validated_path}: {str(e)}]"
+
     elif command == "!BASH":
         # Sanitize the input by stripping whitespace and quotation marks
         clean_arg = arg.strip().strip('"').strip("'")
@@ -64,7 +99,7 @@ def execute_tool(command, arg, content=""):
         print("\n⚠️  Bob REQUESTS SHELL EXECUTION ⚠️")
         print(f"Command:  {clean_arg}")
         confirm = input("Allow this command? [y/N]: ")
-        
+
         if confirm.lower() == 'y':
             try:
                 # shell=True allows pipes and standard bash syntax
@@ -79,37 +114,39 @@ def execute_tool(command, arg, content=""):
         else:
             print("[❌ Execution denied by user.]")
             return "[SYSTEM ERROR: The user denied permission to execute this bash command. You must try a different approach.]"
-            
+
     elif command == "!EDIT":
         print(f"\n[🔧 Harness executing: {command} on {arg}]")
         try:
-            safe_path = arg.strip()
-            if not os.path.exists(safe_path):
-                return f"[SYSTEM ERROR: File {safe_path} not found.]"
-            
-            # Split content into search and replace blocks using the === delimiter
-            parts = content.split('\n===\n')
-            if len(parts) != 2:
-                return "[SYSTEM ERROR: Invalid edit format. Must contain exactly one '===' separator on its own line.]"
-            
-            search_block = parts[0]
-            replace_block = parts[1]
-            
-            with open(safe_path, 'r') as f:
+            validated_path = _validate_path(arg.strip())
+            if not os.path.exists(validated_path):
+                return f"[SYSTEM ERROR: File {validated_path} not found.]"
+
+            # Parse new delimiter-based format
+            search_match = re.search(r'<<<SEARCH_BLOCK>>>(.*?)<<<REPLACE_BLOCK>>>', content, re.DOTALL)
+            replace_match = re.search(r'<<<REPLACE_BLOCK>>>(.*?)(?:<<<|>>>)', content, re.DOTALL)
+
+            if not search_match:
+                return "[SYSTEM ERROR: Missing <<<SEARCH_BLOCK>>> marker in edit block.]"
+            if not replace_match:
+                return "[SYSTEM ERROR: Missing <<<REPLACE_BLOCK>>> or closing <<< marker.]"
+
+            search_block = _strip_visual_newlines(search_match.group(1))
+            replace_block = _strip_visual_newlines(replace_match.group(1))
+
+            with open(validated_path, 'r') as f:
                 file_content = f.read()
-            
+
             if search_block not in file_content:
-                return "[SYSTEM ERROR: Search block not found in file. Edit aborted to prevent data corruption. Ensure the text matches exactly.]"
-            
+                return "[SYSTEM ERROR: Search block not found in file. Edit aborted to prevent data corruption.]"
+
             # Replace only the first occurrence for safety
             new_content = file_content.replace(search_block, replace_block, 1)
-            
-            with open(safe_path, 'w') as f:
+
+            with open(validated_path, 'w') as f:
                 f.write(new_content)
-                
-            return f"[SYSTEM OUTPUT: Successfully edited {safe_path}]"
+
+            return f"[SYSTEM OUTPUT: Successfully edited {validated_path}]"
         except Exception as e:
-            return f"[SYSTEM ERROR: Could not edit {safe_path}: {str(e)}]"
+            return f"[SYSTEM ERROR: Could not edit {validated_path}: {str(e)}]"
     return "[SYSTEM ERROR: Unknown command]"
-
-

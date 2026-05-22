@@ -12,8 +12,9 @@ def call_minimax(history, system_prompt):
         "Content-Type": "application/json"
     }
     
-    # Concatenate the system prompt with the history list
-    messages = [{"role": "system", "content": system_prompt}] + history
+    # Initialize messages with the system prompt and extend with history
+    messages = [{"role": "system", "content": system_prompt}]
+    messages += history
     
     payload = {
         "model": "MiniMax-M2.7", 
