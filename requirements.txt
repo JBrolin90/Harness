@@ -1,0 +1,5 @@
+# Harness Agent Framework - Runtime Dependencies
+requests>=2.28.0
+
+# Harness Agent Framework - Test Dependencies
+pytest>=7.0.0
