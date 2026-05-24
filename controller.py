@@ -1,5 +1,6 @@
 import os
 import re
+from typing import Optional
 from brain import call_llm
 from tools import execute_tool, get_tools_instructions
 from AGENT import AGENT_md_INGESTIOR
@@ -69,6 +70,7 @@ class HarnessController:
         self.persona_name = persona_name
         self.enable_context = enable_context
         self.context = create_context_manager() if enable_context else None
+        self.user_specified_topic: Optional[str] = None
         self.system_prompt = self._build_system_prompt()
         self.conversation_history = []
 
@@ -85,15 +87,25 @@ class HarnessController:
         {AGENT_md_INGESTIOR()}
         """
 
+    def _get_history_stats(self) -> str:
+        """Get statistics about current conversation history."""
+        msg_count = len(self.conversation_history)
+        total_chars = sum(len(m["content"]) for m in self.conversation_history)
+        return f"[History: {msg_count} messages, {total_chars} chars]"
+
     def run_task(self, prompt: str) -> str:
         """Execute a task with the given prompt. Returns the final response."""
-        # Detect topic from prompt
-        if self.context:
-            words = prompt.split()
-            topic = words[2] if len(words) > 2 else "general"
-            self.context.set_topic(topic)
+        # Check if user explicitly stated a topic
+        if self.user_specified_topic is None:
+            detected = self._detect_user_topic(prompt)
+            if detected:
+                self.user_specified_topic = detected
+                if self.context:
+                    self.context.set_topic(detected)
 
         self.conversation_history.append({"role": "user", "content": prompt})
+
+        print(f"\n{self._get_history_stats()}")
 
         response = call_llm(
             self.conversation_history, self.system_prompt, self.current_provider
@@ -102,11 +114,13 @@ class HarnessController:
         self.conversation_history.append({"role": "assistant", "content": response})
 
         # The Autonomous Tool Loop (ReAct) - serial execution
+        iteration = 0
         while True:
             system_result, file_path = self._execute_next_tool(response)
 
             if system_result:
-                print("\n[Harness feeding system result back to Bob...]")
+                iteration += 1
+                print(f"\n[Harness feeding system result back to Bob... {self._get_history_stats()}]")
                 
                 # If context enabled, check if a memory file was updated
                 if self.context and self.enable_context:
@@ -130,11 +144,77 @@ class HarnessController:
                     self.conversation_history, self.system_prompt, self.current_provider
                 )
                 print(f"Bob: {response}")
+                print(f"{self._get_history_stats()} (iteration {iteration})")
                 self.conversation_history.append({"role": "assistant", "content": response})
             else:
                 break
 
         return response
+
+    def _detect_user_topic(self, prompt: str) -> Optional[str]:
+        """
+        Try to detect if the user explicitly stated a topic.
+        Looks for patterns like: 'topic: foo', 'about: foo', 'the topic is foo', etc.
+        Returns the topic string or None if not detected.
+        """
+        prompt_lower = prompt.lower()
+        
+        # Pattern 1: explicit topic markers
+        explicit_patterns = [
+            r'topic:\s*(\w+)',
+            r'about:\s*(\w+)',
+            r'regarding:\s*(\w+)',
+            r'the topic (?:is|should be)\s+(\w+)',
+        ]
+        for pattern in explicit_patterns:
+            match = re.search(pattern, prompt_lower)
+            if match:
+                return match.group(1)
+        
+        # Pattern 2: single-word topic at start (if first 2 words aren't common phrases)
+        words = prompt.split()
+        if len(words) >= 2:
+            first_two = ' '.join(words[:2]).lower()
+            if first_two not in ("can you", "please", "i want", "i need", "help me"):
+                topic_word = words[0].strip('.,!?').lower()
+                if len(topic_word) > 2 and topic_word not in ("hey", "hi", "hello", "yo"):
+                    return topic_word
+        
+        return None
+
+    def _update_topic_from_response(self, response: str) -> None:
+        """Update topic from agent response if user hasn't specified one."""
+        if self.user_specified_topic is not None or not self.context:
+            return
+        
+        patterns = [
+            r'(?:topic|about|regarding):\s*(\w+)',
+            r"(?:I'll|I will) (?:work on|focus on|address|help with)\s+(\w+)",
+            r"(?:I'm|I am) (?:going to |about to )?(?:work on |focus on |help with )?(\w+)",
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, response, re.IGNORECASE)
+            if match:
+                topic = match.group(1).lower()
+                self.context.set_topic(topic)
+                return
+        
+        # Fallback: extract first significant word from response
+        words = response.split()
+        for word in words[:10]:
+            cleaned = re.sub(r'[^\w]', '', word).lower()
+            if len(cleaned) > 3 and cleaned not in ("this", "that", "here", "there", "going", "working", "helping"):
+                self.context.set_topic(cleaned)
+                return
+
+    def _print_topic(self) -> None:
+        """Print the current topic if set."""
+        if self.context:
+            topic = self.context.get_topic()
+            if topic:
+                lock_indicator = " [LOCKED]" if self.user_specified_topic else ""
+                print(f"[Topic: {topic}]{lock_indicator}")
 
     def _execute_next_tool(self, response: str) -> tuple[str | None, str | None]:
         """

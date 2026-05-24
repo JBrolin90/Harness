@@ -16,6 +16,7 @@ class Topic:
     """Represents a conversation topic."""
     name: str
     started: bool = True
+    locked: bool = False  # True if user explicitly stated the topic
     relevant_files: list[str] = field(default_factory=list)
     key_facts: list[str] = field(default_factory=list)
 
@@ -36,11 +37,19 @@ class ContextManager:
         self.current_topic: Optional[Topic] = None
         self.session_memory_updates: list[str] = []  # Tracks what memory was updated this session
 
-    def set_topic(self, topic_name: str) -> None:
-        """Set or update the current topic."""
+    def set_topic(self, topic_name: str, locked: bool = False) -> None:
+        """Set or update the current topic. If locked, topic cannot change."""
+        if self.current_topic and self.current_topic.locked:
+            return
         if self.current_topic is None or self.current_topic.name != topic_name:
-            self.current_topic = Topic(name=topic_name, started=True)
-            print(f"[Context: Now tracking topic: {topic_name}]")
+            self.current_topic = Topic(name=topic_name, started=True, locked=locked)
+            lock_str = " [LOCKED]" if locked else ""
+            print(f"[Context: Now tracking topic: {topic_name}]{lock_str}")
+
+    def set_user_topic(self, topic_name: str) -> None:
+        """Set topic that user explicitly stated - always locks the topic."""
+        self.current_topic = Topic(name=topic_name, started=True, locked=True)
+        print(f"[Context: User stated topic: {topic_name}]")
 
     def get_topic(self) -> Optional[str]:
         """Get current topic name."""
@@ -112,6 +121,14 @@ class ContextManager:
     def reset_session(self) -> None:
         """Reset session-only state (keeps persistent config)."""
         self.session_memory_updates = []
+        self.current_topic = None  # Allow new topic to be set after reset
+
+    def get_topic_display(self) -> str:
+        """Get formatted topic string for printing."""
+        if self.current_topic:
+            lock_str = " [LOCKED]" if self.current_topic.locked else ""
+            return f"[Topic: {self.current_topic.name}]{lock_str}"
+        return ""
 
 
 def create_context_manager() -> ContextManager:
