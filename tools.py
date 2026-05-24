@@ -72,17 +72,20 @@ def execute_tool(command, arg, content=""):
         try:
             validated_path = _validate_path(arg.strip())
             with open(validated_path, 'r') as f:
-                content = f.read()
-            return f"[SYSTEM OUTPUT: Content of {validated_path}]\n{content}"
+                file_content = f.read()
+            return f"[SYSTEM OUTPUT: Content of {validated_path}]\n{file_content}"
         except Exception as e:
             return f"[SYSTEM ERROR: {str(e)}]"
 
 
     elif command == "!WRITE":
         print(f"\n[🔧 Harness executing: {command} on {arg}]")
+        original_arg = arg.strip()
         try:
-            validated_path = _validate_path(arg.strip())
-            # Parse new delimiter-based format: content is exactly between markers
+            validated_path = _validate_path(original_arg)
+        except ValueError as e:
+            return f"[SYSTEM ERROR: {str(e)}]"
+        try:
             content_match = re.search(r'<<<WRITE_BLOCK>>>(.*?)(?:<<<|>>>)', content, re.DOTALL)
             if content_match:
                 write_content = _strip_visual_newlines(content_match.group(1))
@@ -92,7 +95,7 @@ def execute_tool(command, arg, content=""):
                 f.write(write_content)
             return f"[SYSTEM OUTPUT: Successfully wrote {len(write_content)} characters to {validated_path}]"
         except Exception as e:
-            return f"[SYSTEM ERROR: Could not write to {validated_path}: {str(e)}]"
+            return f"[SYSTEM ERROR: Could not write to {original_arg}: {str(e)}]"
 
     elif command == "!BASH":
         # Sanitize the input by stripping whitespace and quotation marks
@@ -149,8 +152,12 @@ def execute_tool(command, arg, content=""):
 
     elif command == "!EDIT":
         print(f"\n[🔧 Harness executing: {command} on {arg}]")
+        original_arg = arg.strip()
         try:
-            validated_path = _validate_path(arg.strip())
+            validated_path = _validate_path(original_arg)
+        except ValueError as e:
+            return f"[SYSTEM ERROR: {str(e)}]"
+        try:
             if not os.path.exists(validated_path):
                 return f"[SYSTEM ERROR: File {validated_path} not found.]"
 
@@ -180,5 +187,5 @@ def execute_tool(command, arg, content=""):
 
             return f"[SYSTEM OUTPUT: Successfully edited {validated_path}]"
         except Exception as e:
-            return f"[SYSTEM ERROR: Could not edit {validated_path}: {str(e)}]"
+            return f"[SYSTEM ERROR: Could not edit {original_arg}: {str(e)}]"
     return "[SYSTEM ERROR: Unknown command]"

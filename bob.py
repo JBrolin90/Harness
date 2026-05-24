@@ -1,12 +1,12 @@
 import controller
 
-controller.init()
+ctrl = controller.HarnessController()
 
-print(f"Bob-Harness v1.5 initialized. \nBrain: \n  {controller.current_provider.name} \n  ({controller.current_provider.model})")
+print(f"Bob-Harness v1.5 initialized. \nBrain: \n  {ctrl.current_provider.name} \n  ({ctrl.current_provider.model})")
 print("Type 'exit' to quit.")
 
 while True:
     user_input = input("\nJoachim: ")
     if user_input.lower() == "exit":
         break
-    controller.run_task(user_input)
+    ctrl.run_task(user_input)
