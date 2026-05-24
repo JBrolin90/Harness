@@ -7,10 +7,40 @@ from terminal_history import terminal_history_upgrade
 from provider import ProviderManager
 
 
+PERSONAS_DIR = os.path.join(os.path.dirname(__file__), "personas")
+
+
+def load_persona(persona_name: str = "default") -> str:
+    """Load a persona definition from the personas directory.
+    
+    Args:
+        persona_name: Name of the persona (directory name in personas/)
+        
+    Returns:
+        Persona definition string to use in system prompt
+        """
+    persona_path = os.path.join(PERSONAS_DIR, persona_name, "persona.md")
+    
+    if not os.path.isfile(persona_path):
+        print(f"[Harness: Persona '{persona_name}' not found, using default]")
+        persona_path = os.path.join(PERSONAS_DIR, "default", "persona.md")
+        if not os.path.isfile(persona_path):
+            return "You are Bob, a helpful AI assistant."
+    
+    try:
+        with open(persona_path, 'r') as f:
+            content = f.read()
+        print(f"[Harness: Loaded persona '{persona_name}']")
+        return content
+    except Exception as e:
+        print(f"[Harness: Could not load persona: {e}]")
+        return "You are Bob, a helpful AI assistant."
+
+
 class HarnessController:
     """Agent controller with instance-based state for modularity and testability."""
 
-    def __init__(self, provider_name: str = "cloud-pro"):
+    def __init__(self, provider_name: str = "cloud-pro", persona_name: str = "default"):
         terminal_history_upgrade()
 
         # Initialize the Provider Manager and select the brain
@@ -23,13 +53,14 @@ class HarnessController:
                 "Check provider.py or providers.json"
             )
 
+        self.persona_name = persona_name
         self.system_prompt = self._build_system_prompt()
         self.conversation_history = []
 
     def _build_system_prompt(self) -> str:
-        persona = "You are Bob, a Software and architect expert."
+        persona_text = load_persona(self.persona_name)
         return f"""
-        {persona}
+        {persona_text}
         Current Working Directory: {os.getcwd()}
         You have access to a local file system via your Harness.
         {get_tools_instructions()}
