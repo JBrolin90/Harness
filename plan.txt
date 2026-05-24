@@ -13,3 +13,119 @@ A New Persona: We could duplicate this controller, swap the system prompt to a s
 Tool Registry Refinement: We can move the tools out of the main script and into a dedicated tools/ folder to make the harness completely modular and ready for a multi-agent setup.
 
 What sounds like the most fun for your next engineering sprint?
+
+
+Performance
+That is a very insightful critique from "pi," and it perfectly captures the architectural gap between a "home-grown" agent and a professional-grade implementation. When pi refers to Bob as a "regex-based state machine," it's highlighting that Bob's ability to act depends entirely on strings matching specific patterns, which is inherently brittle compared to the "event-driven tool-calling" used by platforms like OpenAI or MiniMax natively.
+
+Here is how to think about those four points and how they relate to the 14-minute difference you experienced:
+
+1. Regex-based vs. Native Tool Calling
+Bob's way: You send a massive block of text, the model predicts text that looks like !WRITE, and your Python script uses a Regex to "scrape" that out. If the model adds a single space before the ! or forgets a newline, the Regex might fail, the harness ignores the command, and the model gets stuck in a loop wondering why the file wasn't written.
+Pi's way (Native): The API actually has a separate "tools" parameter. When the model wants to write a file, it doesn't just type text; it sends a specific "call" signal that the API identifies before the response even reaches the user. It’s like the difference between someone writing "I want water" on a piece of paper and someone actually pressing a "Water" button.
+2. Serial vs. Parallel Execution
+This is likely the biggest "Total Time" culprit.
+
+Bob's way (Serial): In your controller.py, you find the first match and execute it. If Bob needs to !READ three files to understand how to write test_controller.py, he has to do three separate round-trips to the cloud.
+Pi's way (Parallel): Professional agents can emit multiple tool calls in one message. Pi sees "I need to read these 3 files," executes all three simultaneously, and feeds the results back in one go. You save minutes of network latency and "prefill" time.
+3. Typed Schemas
+"Typed schemas" mean the model is given a strict JSON structure it must follow. This prevents the "Invalid format" errors that cause Bob to retry. Because Bob is just typing raw text, he has more "creative freedom," which is exactly what leads to parsing errors and retries.
+
+Upgrading Bob: Moving toward "Event-Driven"
+To bridge the gap and stop the 15-minute stalls, we can upgrade controller.py to support Parallel Execution and more robust parsing. This allows Bob to handle multiple commands in a single round-trip, significantly cutting down completion time.
+
+/media/joachim/lmde/lab/prj/Harness/controller.py
+controller.py
+-33
++32
+ Show full code block 
+
+    # The Autonomous Tool Loop (ReAct)
+    while True:
+        system_result = None
+        # We will collect all tool results from this turn to send back at once
+        combined_system_results = []
+        executed_tools = []
+
+        # Define regexes
+        regex_map = {
+            "!WRITE": r'^\s*!(WRITE)\s+(\S+)',
+            "!EDIT":  r'^\s*!(EDIT)\s+(\S+)',
+            "!READ":  r'^\s*!(READ)\s+(\S+)',
+            "!BASH":  r'^\s*!(BASH)\s+(.+)',
+            "!LS":    r'^\s*!(LS)\s+(\S+)'
+            "!WRITE": r'^\s*!(WRITE)\s+(\S+)',
+            "!EDIT":  r'^\s*!(EDIT)\s+(\S+)',
+            "!READ":  r'^\s*!(READ)\s+(\S+)',
+            "!BASH":  r'^\s*!(BASH)\s+(.+)',
+            "!LS":    r'^\s*!(LS)\s+(\S+)'
+        }
+
+        # Find all matches and their starting positions
+        # Find ALL matches in the response, not just the first one
+        matches = []
+        for cmd_type, pattern in regex_map.items():
+            # Use MULTILINE to allow ^ to match start of any line in the response
+            flags = re.MULTILINE
+            if "WRITE" in cmd_type or "EDIT" in cmd_type:
+                flags |= re.DOTALL
+
+            m = re.search(pattern, response, flags)
+            if m:
+            # Use finditer to catch multiple calls of the same type (e.g., two !READs)
+            for m in re.finditer(pattern, response, re.MULTILINE | (re.DOTALL if "WRITE" in cmd_type or "EDIT" in cmd_type else 0)):
+                matches.append((m.start(), cmd_type, m))
+
+        # Sort by occurrence in the text and pick the first one
+        if matches:
+            # Execute tools in the order they appear in the text
+            matches.sort(key=lambda x: x[0])
+            _, tool_cmd, match = matches[0]
+            
+            for _, tool_cmd, match in matches:
+                if tool_cmd in ["!WRITE", "!EDIT"]:
+                    result = execute_tool(tool_cmd, match.group(2), response)
+                else:
+                    result = execute_tool(tool_cmd, match.group(2))
+                
+                combined_system_results.append(result)
+                executed_tools.append((tool_cmd, result))
+
+            if tool_cmd in ["!WRITE", "!EDIT"]:
+                system_result = execute_tool(tool_cmd, match.group(2), response)
+            else:
+                system_result = execute_tool(tool_cmd, match.group(2))
+
+        # Feed it back to the loop
+        if system_result:
+        # If any tools were used, feed the aggregate results back to Bob
+        if combined_system_results:
+            print("\n[Harness feeding system result back to Bob...]")
+            
+            full_result_text = "\n\n".join(combined_system_results)
+            conversation_history.append({"role": "user", "content": full_result_text})
+
+            conversation_history.append({"role": "user", "content": system_result})
+
+            # Optimization: If we just performed a WRITE or EDIT and it was successful,
+            # we can compact the assistant's previous message to save tokens.
+            # This prevents "Context Debt" from slowing down the API response time.
+            if tool_cmd in ["!WRITE", "!EDIT"] and "Successfully" in system_result:
+                last_assistant_msg = conversation_history[-2]["content"]
+                # Replace the massive code block with a concise placeholder
+                compacted = re.sub(r'<<<.*?>>>', '[BLOCK CONTENT SAVED TO DISK]', last_assistant_msg, flags=re.DOTALL)
+                conversation_history[-2]["content"] = compacted
+            # History Compaction for any successful writes in this batch
+            for tool_cmd, res in executed_tools:
+                if tool_cmd in ["!WRITE", "!EDIT"] and "Successfully" in res:
+                    last_assistant_msg = conversation_history[-2]["content"]
+                    compacted = re.sub(r'<<<.*?>>>', '[BLOCK CONTENT SAVED TO DISK]', last_assistant_msg, flags=re.DOTALL)
+                    conversation_history[-2]["content"] = compacted
+
+            response = call_llm(conversation_history, system_prompt, current_provider)
+Why this changes how you think about the performance:
+Parallelism: If test_controller.py requires checking controller.py, provider.py, and tools.py, Bob can now output three !READ commands at once. You just saved 2 full cloud round-trips (roughly 40-90 seconds).
+Batch Processing: The "User" message fed back to the LLM now contains the results of all actions taken in that "thought" cycle. This makes the conversation history much cleaner and more logical for the model to follow.
+State Machine Efficiency: By using re.finditer, you've moved Bob away from a "find-one-and-stop" machine to a "scan-and-execute-all" agent. This is much closer to how pi operates.
+The next time you try test_controller.py, Bob will be able to perform his research phase in a single step, rather than crawling through the files one by one.
+
