@@ -60,6 +60,14 @@ Each test class should have clean fixture setup. Avoid shared state between test
 ### Mock Side Effects
 For sequential responses, use `mock_call_llm.side_effect = [resp1, resp2, resp3]`
 
+## Git Configuration
+
+### SSH for GitHub
+Always use SSH for pushing to GitHub:
+```bash
+git remote set-url origin git@github.com:JBrolin90/Harness.git
+```
+
 ## Future Considerations
 
 ### Dual Execution Modes

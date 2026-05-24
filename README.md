@@ -38,6 +38,10 @@ Edit `providers.json` or modify defaults in `provider.py`:
 | cloud-pro | minimax | MiniMax-M2.7 |
 | local-coder | ollama | qwen2.5-coder:7b |
 
+`providers.json` is persisted automatically by `provider.py` when providers are added or loaded, so custom provider entries can be managed there directly.
+
+The agent also supports a local `AGENT.md` in the current working directory; when present, its contents are appended to the system prompt as directory-specific instructions.
+
 ## Personas
 
 Personas define how the agent behaves and communicates. They are stored in the `personas/` directory:

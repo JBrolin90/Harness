@@ -6,7 +6,7 @@ from tools import execute_tool, get_tools_instructions
 from AGENT import AGENT_md_INGESTIOR
 from terminal_history import terminal_history_upgrade
 from provider import ProviderManager
-from context import create_context_manager, ContextManager
+from context import create_context_manager
 
 
 PERSONAS_DIR = os.path.join(os.path.dirname(__file__), "personas")
