@@ -123,6 +123,66 @@ controller.py
                     conversation_history[-2]["content"] = compacted
 
             response = call_llm(conversation_history, system_prompt, current_provider)
+
+---
+
+Dual Execution Strategy: Large vs Small Models
+===============================================
+
+Background
+----------
+Smaller local models (e.g., qwen2.5-coder:7b) struggle with:
+- Following complex multi-tool regex patterns
+- Maintaining context across parallel execution
+- Precise delimiter parsing in WRITE/EDIT blocks
+
+Larger cloud models (e.g., MiniMax-M2) can handle:
+- Parallel tool execution
+- Complex delimiter parsing
+- State management across multiple rounds
+
+Proposed Solution
+-----------------
+Implement two distinct execution modes in controller.py:
+
+1. SERIAL_MODE (for small/local models)
+   - One tool per response cycle
+   - Simpler regex: basic !TOOL pattern matching only
+   - No delimiter blocks - use direct content after command
+   - More explicit instruction in system prompt
+   - Human-in-the-loop gate more permissive for simple commands
+
+2. PARALLEL_MODE (for large/cloud models)
+   - Multiple tools per response cycle (re.finditer)
+   - Full delimiter parsing (<<<WRITE_BLOCK>>>, etc.)
+   - History compaction to prevent context debt
+   - Batch result aggregation
+
+Implementation Approach
+----------------------
+Add a "execution_mode" attribute to ProviderConfig in provider.py:
+
+    @dataclass
+    class ProviderConfig:
+        ...
+        execution_mode: str = "serial"  # "serial" or "parallel"
+
+Controller logic:
+
+    if current_provider.execution_mode == "parallel":
+        # Use re.finditer + batch execution + history compaction
+    else:
+        # Use simple first-match regex + single tool execution
+
+System prompt variations:
+- Serial: "Output ONE tool per response. Format: !TOOL /path\n[content on next line]"
+- Parallel: Full delimiter-based parsing with <<<BLOCK>>> markers
+
+Open Questions
+-------------
+- Should this be provider-configured or auto-detected based on model name?
+- Should SERIAL_MODE support different tools than PARALLEL_MODE?
+- How to handle models that fall in between (medium-sized local models)?
 Why this changes how you think about the performance:
 Parallelism: If test_controller.py requires checking controller.py, provider.py, and tools.py, Bob can now output three !READ commands at once. You just saved 2 full cloud round-trips (roughly 40-90 seconds).
 Batch Processing: The "User" message fed back to the LLM now contains the results of all actions taken in that "thought" cycle. This makes the conversation history much cleaner and more logical for the model to follow.
