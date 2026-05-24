@@ -115,7 +115,8 @@ class TestHarnessControllerRunTask:
             mock_pm_instance.get_provider.return_value = mock_provider
 
             from controller import HarnessController
-            ctrl = HarnessController()
+            # Disable context tracking for basic tool execution tests
+            ctrl = HarnessController(enable_context=False)
             ctrl.current_provider = MagicMock()
             ctrl.system_prompt = "Test prompt"
             ctrl.conversation_history = []
@@ -341,13 +342,14 @@ class TestExecuteNextTool:
             mock_pm_instance.get_provider.return_value = mock_provider
 
             from controller import HarnessController
-            ctrl = HarnessController()
+            ctrl = HarnessController(enable_context=False)
             return ctrl
 
     def test_execute_next_tool_returns_none_when_no_match(self, controller):
-        """_execute_next_tool returns None if no tool command found"""
-        result = controller._execute_next_tool("Just a plain response")
+        """_execute_next_tool returns (None, None) if no tool command found"""
+        result, file_path = controller._execute_next_tool("Just a plain response")
         assert result is None
+        assert file_path is None
 
     @patch('controller.execute_tool')
     def test_execute_next_tool_executes_first_match(self, mock_execute, controller):
@@ -355,11 +357,14 @@ class TestExecuteNextTool:
         mock_execute.return_value = "[SYSTEM OUTPUT: done]"
 
         response = "!READ /path/to/file\n!WRITE /another/file"
-        controller._execute_next_tool(response)
+        result, file_path = controller._execute_next_tool(response)
 
         # Only !READ should be executed (first in text)
         # !READ only passes command + path (no content), unlike !WRITE/!EDIT
         mock_execute.assert_called_once_with("!READ", "/path/to/file")
+        assert result == "[SYSTEM OUTPUT: done]"
+        # !READ doesn't return file_path (only WRITE/EDIT do)
+        assert file_path is None
 
     @patch('controller.execute_tool')
     def test_execute_next_tool_passes_content_for_write_edit(self, mock_execute, controller):
@@ -367,11 +372,12 @@ class TestExecuteNextTool:
         mock_execute.return_value = "[SYSTEM OUTPUT: done]"
 
         response = "!WRITE /file.txt\n<<<WRITE_BLOCK>>>content<<<"
-        controller._execute_next_tool(response)
+        result, file_path = controller._execute_next_tool(response)
 
         # Verify full response passed for marker parsing
         _, _, content = mock_execute.call_args[0]
         assert "<<<WRITE_BLOCK>>>" in content
+        assert file_path == "/file.txt"
 
     @patch('controller.execute_tool')
     def test_execute_next_tool_no_content_param_for_read(self, mock_execute, controller):
@@ -379,7 +385,7 @@ class TestExecuteNextTool:
         mock_execute.return_value = "[SYSTEM OUTPUT: done]"
 
         response = "!READ /path/to/file"
-        controller._execute_next_tool(response)
+        result, file_path = controller._execute_next_tool(response)
 
         # Should be called with just command and path (no content)
         mock_execute.assert_called_once_with("!READ", "/path/to/file")
