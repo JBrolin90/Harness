@@ -69,7 +69,7 @@ class TestHarnessControllerRunTask:
             ctrl = HarnessController(enable_context=False)
             ctrl.current_provider = MagicMock()
             ctrl.system_prompt = "Test prompt"
-            ctrl.conversation_history = []
+            ctrl.session.conversation_history = []
             yield ctrl
 
     @patch('controller.call_llm')
@@ -117,7 +117,7 @@ class TestHarnessControllerRunTask:
         controller_instance.run_task("Second message")
 
         # Each run_task adds 2 messages (user + assistant)
-        assert len(controller_instance.conversation_history) == 4
+        assert len(controller_instance.session.conversation_history) == 4
 
 
 class TestModuleLevelCompatibility:
@@ -175,18 +175,18 @@ class TestControllerReset:
 
     def test_reset_clears_history(self, controller_instance):
         """reset() should clear conversation_history."""
-        controller_instance.conversation_history = [
+        controller_instance.session.conversation_history = [
             {"role": "user", "content": "test1"},
             {"role": "assistant", "content": "test2"}
         ]
 
         controller_instance.reset()
 
-        assert controller_instance.conversation_history == []
+        assert controller_instance.session.conversation_history == []
 
     def test_reset_allows_fresh_conversation(self, controller_instance):
         """After reset, run_task should start clean."""
-        controller_instance.conversation_history = [{"role": "user", "content": "old"}]
+        controller_instance.session.conversation_history = [{"role": "user", "content": "old"}]
 
         with patch('controller.call_llm') as mock_llm:
             mock_llm.return_value = "Fresh response"
@@ -194,5 +194,5 @@ class TestControllerReset:
             controller_instance.run_task("New prompt")
 
             # History should have only the new exchange
-            assert len(controller_instance.conversation_history) == 2
-            assert controller_instance.conversation_history[0]["content"] == "New prompt"
+            assert len(controller_instance.session.conversation_history) == 2
+            assert controller_instance.session.conversation_history[0]["content"] == "New prompt"

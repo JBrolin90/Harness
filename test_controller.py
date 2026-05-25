@@ -29,9 +29,9 @@ class TestHarnessControllerInit:
 
             assert hasattr(ctrl, 'current_provider')
             assert hasattr(ctrl, 'system_prompt')
-            assert hasattr(ctrl, 'conversation_history')
+            assert hasattr(ctrl, 'session')
             assert ctrl.current_provider == mock_provider
-            assert isinstance(ctrl.conversation_history, list)
+            assert isinstance(ctrl.session.conversation_history, list)
 
     @patch('controller.terminal_history_upgrade')
     @patch('controller.ProviderManager')
@@ -93,11 +93,11 @@ class TestHarnessControllerInit:
 
         from controller import HarnessController
         ctrl = HarnessController()
-        ctrl.conversation_history = [{"role": "user", "content": "test"}]
+        ctrl.session.conversation_history = [{"role": "user", "content": "test"}]
 
         ctrl.reset()
 
-        assert ctrl.conversation_history == []
+        assert ctrl.session.conversation_history == []
 
 
 class TestHarnessControllerRunTask:
@@ -119,7 +119,7 @@ class TestHarnessControllerRunTask:
             ctrl = HarnessController(enable_context=False)
             ctrl.current_provider = MagicMock()
             ctrl.system_prompt = "Test prompt"
-            ctrl.conversation_history = []
+            ctrl.session.conversation_history = []
             yield ctrl
 
     @patch('controller.call_llm')
@@ -129,11 +129,11 @@ class TestHarnessControllerRunTask:
 
         controller.run_task("Hello Bob")
 
-        assert len(controller.conversation_history) == 2
-        assert controller.conversation_history[0]["role"] == "user"
-        assert controller.conversation_history[0]["content"] == "Hello Bob"
-        assert controller.conversation_history[1]["role"] == "assistant"
-        assert controller.conversation_history[1]["content"] == "Hello from Bob"
+        assert len(controller.session.conversation_history) == 2
+        assert controller.session.conversation_history[0]["role"] == "user"
+        assert controller.session.conversation_history[0]["content"] == "Hello Bob"
+        assert controller.session.conversation_history[1]["role"] == "assistant"
+        assert controller.session.conversation_history[1]["content"] == "Hello from Bob"
 
     @patch('controller.call_llm')
     @patch('controller.execute_tool')
