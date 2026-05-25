@@ -77,23 +77,6 @@ class ContextManager:
             self.session_memory_updates.append(file_path)
             print(f"[Context: Memory file updated: {file_path}]")
 
-    def should_add_to_history(self, tool_result: str, memory_updated: bool = False) -> tuple[bool, Optional[str]]:
-        """
-        Determine if a tool result should be added to conversation history.
-        
-        Returns:
-            (should_add, summary_or_none)
-            - If should_add=True and summary=None: add full result
-            - If should_add=True and summary="...": add summary only
-            - If should_add=False: don't add to history (memory was updated)
-        """
-        # If a memory file was updated, don't add full result to history
-        # The persona will reference the memory file directly
-        if memory_updated:
-            return (True, "[Memory updated - see memory.md for details]")
-        
-        return (True, None)
-
     def add_key_facts(self, facts: list[str]) -> None:
         """Add key facts to the current topic."""
         if self.current_topic:
