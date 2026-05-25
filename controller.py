@@ -9,48 +9,7 @@ from AGENT import AGENT_md_INGESTIOR
 from terminal_history import terminal_history_upgrade
 from provider import ProviderManager
 from context import create_context_manager
-
-
-PERSONAS_DIR = os.path.join(os.path.dirname(__file__), "personas")
-
-
-def load_persona(persona_name: str = "default") -> str:
-    """Load a persona definition from the personas directory.
-    
-    Args:
-        persona_name: Name of the persona (directory name in personas/)
-        
-    Returns:
-        Persona definition string to use in system prompt
-        """
-    persona_path = os.path.join(PERSONAS_DIR, persona_name, "persona.md")
-    
-    if not os.path.isfile(persona_path):
-        print(f"[Harness: Persona '{persona_name}' not found, using default]")
-        persona_path = os.path.join(PERSONAS_DIR, "default", "persona.md")
-        if not os.path.isfile(persona_path):
-            return "You are Bob, a helpful AI assistant."
-    
-    try:
-        with open(persona_path, 'r') as f:
-            content = f.read()
-        print(f"[Harness: Loaded persona '{persona_name}']")
-        return content
-    except Exception as e:
-        print(f"[Harness: Could not load persona: {e}]")
-        return "You are Bob, a helpful AI assistant."
-
-
-def load_persona_memory(persona_name: str) -> str:
-    """Load persona memory file if it exists."""
-    memory_path = os.path.join(PERSONAS_DIR, persona_name, "memory.md")
-    if os.path.isfile(memory_path):
-        try:
-            with open(memory_path, 'r') as f:
-                return f"\n\nYour memory:\n{f.read()}"
-        except Exception:
-            pass
-    return ""
+from persona import PersonaManager
 
 
 class HarnessController:
@@ -72,8 +31,7 @@ class HarnessController:
         # Type narrowed to non-None after RuntimeError
         self.current_provider = provider
 
-        self.persona_name = persona_name
-        self.enable_context = enable_context
+        self.persona = PersonaManager(persona_name, enable_context)
         self.context = create_context_manager() if enable_context else None
         self.user_specified_topic: Optional[str] = None
         self.system_prompt = self._build_system_prompt()
@@ -95,8 +53,8 @@ class HarnessController:
             print(f"[Harness: Warning - could not save session: {e}]")
 
     def _build_system_prompt(self) -> str:
-        persona_text = load_persona(self.persona_name)
-        memory_text = load_persona_memory(self.persona_name) if self.enable_context else ""
+        persona_text = self.persona.get_prompt_fragment()
+        memory_text = self.persona.get_memory_fragment()
 
         # Load project.md from CWD as the shared source of truth
         project_text = ""
