@@ -64,7 +64,7 @@ class ContextManager:
             return False
         
         # Check if this is a memory.md file in a persona directory
-        if file_path.endswith("memory.md") and "personas" in file_path:
+        if file_path.endswith("memory.md") and ("personas" in file_path or ".bob" in file_path):
             return True
         
         # Check for other common memory file names
@@ -117,5 +117,5 @@ class ContextManager:
 def create_context_manager() -> ContextManager:
     """Factory function to create a ContextManager with correct paths."""
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    personas_dir = os.path.join(project_root, "personas")
+    personas_dir = os.path.expanduser("~/.bob/personas")
     return ContextManager(project_root, personas_dir)

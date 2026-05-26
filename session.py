@@ -18,16 +18,19 @@ class SessionManager:
 
     MAX_HISTORY_SIZE = 50  # Max turns before compression
     MAX_CONTENT_LENGTH = 15000  # Truncate READ results larger than this
+    SESSION_DIR = ".bob/sessions"
 
     def __init__(self):
         self.conversation_history: list[Message] = []
         self.session_file = self._get_session_file_path()
 
     def _get_session_file_path(self) -> str:
-        """Generate session file path: session-<date>-<cwd>.json"""
+        """Generate session file path: <cwd>/.bob-sessions/<date>-<cwd>.json"""
+        session_dir = os.path.join(os.getcwd(), self.SESSION_DIR)
+        os.makedirs(session_dir, exist_ok=True)
         date_str = datetime.now().strftime("%Y%m%d")
         cwd_safe = os.getcwd().replace("/", "_").lstrip("_")
-        return f"session-{date_str}-{cwd_safe}.json"
+        return os.path.join(session_dir, f"session-{date_str}-{cwd_safe}.json")
 
     def add_user_message(self, content: str) -> None:
         """Add a user message to history."""
@@ -46,6 +49,7 @@ class SessionManager:
     def save(self) -> None:
         """Persist conversation history to disk."""
         try:
+            os.makedirs(os.path.dirname(self.session_file), exist_ok=True)
             with open(self.session_file, 'w') as f:
                 json.dump(self.conversation_history, f, indent=2)
         except Exception as e:

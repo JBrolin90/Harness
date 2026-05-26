@@ -1,1 +1,0 @@
-# Personal memory for Diane

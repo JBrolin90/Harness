@@ -2,8 +2,7 @@
 
 import os
 
-
-PERSONAS_DIR = os.path.join(os.path.dirname(__file__), "personas")
+PERSONAS_DIR = os.path.expanduser("~/.bob/personas")
 
 DEFAULT_FALLBACK = "You are Bob, a helpful AI assistant."
 
