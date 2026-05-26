@@ -134,7 +134,7 @@ class TestHarnessControllerRunTask:
         assert controller.session.conversation_history[1]["content"] == "Hello from Bob"
 
     @patch('controller.call_llm')
-    @patch('controller.execute_tool')
+    @patch('tools.execute_tool')
     def test_run_task_no_tools_skips_loop(self, mock_execute, mock_call_llm, controller):
         """If no tool commands in response, ReAct loop should not execute"""
         mock_call_llm.return_value = "I can help with that."
@@ -144,7 +144,7 @@ class TestHarnessControllerRunTask:
         mock_execute.assert_not_called()
 
     @patch('controller.call_llm')
-    @patch('controller.execute_tool')
+    @patch('tools.execute_tool')
     def test_run_task_single_tool_call(self, mock_execute, mock_call_llm, controller):
         """Tool in first response triggers tool execution, then loop continues"""
         mock_execute.return_value = "[SYSTEM OUTPUT: File read successfully]"
@@ -162,7 +162,7 @@ class TestHarnessControllerRunTask:
         assert mock_call_llm.call_count == 2  # Initial + after tool
 
     @patch('controller.call_llm')
-    @patch('controller.execute_tool')
+    @patch('tools.execute_tool')
     def test_run_task_strips_leading_trailing_newlines_from_tools(self, mock_execute, mock_call_llm, controller):
         """execute_tool is called with response containing the full text including markers"""
         mock_execute.return_value = "[SYSTEM OUTPUT: done]"
@@ -181,7 +181,7 @@ That should help."""
         assert call_args is not None
 
     @patch('controller.call_llm')
-    @patch('controller.execute_tool')
+    @patch('tools.execute_tool')
     def test_run_task_returns_final_response(self, mock_execute, mock_call_llm, controller):
         """run_task() should return the final response string"""
         mock_call_llm.return_value = "Final answer from Bob"
@@ -192,7 +192,7 @@ That should help."""
         assert result == "Final answer from Bob"
 
     @patch('controller.call_llm')
-    @patch('controller.execute_tool')
+    @patch('tools.execute_tool')
     def test_run_task_multiple_tools_sequential(self, mock_execute, mock_call_llm, controller):
         """When multiple tools in response, only first is executed (serial mode)"""
         mock_execute.return_value = "[SYSTEM OUTPUT: first tool done]"
@@ -346,7 +346,7 @@ class TestExecuteNextTool:
         assert result is None
         assert file_path is None
 
-    @patch('controller.execute_tool')
+    @patch('tools.execute_tool')
     def test_execute_next_tool_executes_first_match(self, mock_execute, controller):
         """_execute_next_tool executes the first tool found in text order"""
         mock_execute.return_value = "[SYSTEM OUTPUT: done]"
@@ -361,7 +361,7 @@ class TestExecuteNextTool:
         # !READ doesn't return file_path (only WRITE/EDIT do)
         assert file_path is None
 
-    @patch('controller.execute_tool')
+    @patch('tools.execute_tool')
     def test_execute_next_tool_passes_content_for_write_edit(self, mock_execute, controller):
         """_execute_next_tool passes full response for WRITE/EDIT to parse markers"""
         mock_execute.return_value = "[SYSTEM OUTPUT: done]"
@@ -374,7 +374,7 @@ class TestExecuteNextTool:
         assert "<<<WRITE_BLOCK>>>" in content
         assert file_path == "/file.txt"
 
-    @patch('controller.execute_tool')
+    @patch('tools.execute_tool')
     def test_execute_next_tool_no_content_param_for_read(self, mock_execute, controller):
         """_execute_next_tool passes only path for non-WRITE/EDIT commands"""
         mock_execute.return_value = "[SYSTEM OUTPUT: done]"

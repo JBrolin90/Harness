@@ -7,6 +7,7 @@ import json
 import os
 import re
 from datetime import datetime
+from tools import ToolExecutionReport # Import the new dataclass
 from typing import Literal
 
 
@@ -40,11 +41,30 @@ class SessionManager:
         """Add an assistant message to history."""
         self.conversation_history.append({"role": "assistant", "content": content})
 
-    def add_tool_result(self, result: str, file_path: str | None) -> str:
-        """Process and add a tool result. Returns the summary to add to history."""
-        summary = self._summarize_tool_result(result, file_path)
+    def process_tool_execution_report(self, report: ToolExecutionReport) -> None:
+        """
+        Processes a ToolExecutionReport, adding results to history and performing compaction.
+        """
+        if not report.has_results:
+            return
+
+        full_result_text = "\n\n".join(report.results)
+        summary = self._summarize_tool_result(full_result_text, None) # Summarize the combined results
         self.conversation_history.append({"role": "user", "content": summary})
-        return summary
+
+        # History Compaction for any successful writes/edits in this batch
+        for tool_cmd, res, file_path_for_compaction in report.executed_details:
+            if tool_cmd in ["!WRITE", "!EDIT"] and "Successfully" in res:
+                # Find the last assistant message that contains the original tool call
+                # This assumes the tool call was in the immediately preceding assistant message
+                # A more robust solution might involve tracking message IDs or more complex parsing
+                for i in range(len(self.conversation_history) - 2, -1, -1):
+                    msg = self.conversation_history[i]
+                    if msg["role"] == "assistant" and tool_cmd in msg["content"] and file_path_for_compaction and file_path_for_compaction in msg["content"]:
+                        compacted = re.sub(r'<<<.*?>>>', '[BLOCK CONTENT SAVED TO DISK]', msg["content"], flags=re.DOTALL)
+                        self.conversation_history[i]["content"] = compacted
+                        break
+
 
     def save(self) -> None:
         """Persist conversation history to disk."""

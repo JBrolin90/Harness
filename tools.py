@@ -1,6 +1,7 @@
 import subprocess
 import os
 import re
+from dataclasses import dataclass, field
 
 # Define regexes for tool detection
 _tool_regex_map = {
@@ -11,6 +12,13 @@ _tool_regex_map = {
     "!LS":    r'^\s*!(LS)\s+(\S+)'
 }
 
+@dataclass
+class ToolExecutionReport:
+    """Structured report of tool execution results."""
+    results: list[str] = field(default_factory=list)
+    # Stores (tool_cmd, result_string, file_path_arg) for history compaction
+    executed_details: list[tuple[str, str, str | None]] = field(default_factory=list)
+    has_results: bool = False
 
 def get_tools_instructions():
     return """
@@ -76,6 +84,98 @@ def _strip_visual_newlines(text):
     if text.endswith('\n'): 
         text = text[:-1]
     return text
+
+class ToolEngine:
+    """
+    Manages the parsing and execution of tool calls from LLM responses.
+    Handles both serial and parallel execution modes.
+    """
+    def __init__(self):
+        self._tool_regex_map = get_tool_regex_map()
+
+    def _parse_tool_calls(self, response: str, execution_mode: str) -> list[tuple[int, str, re.Match]]:
+        """
+        Finds all tool command matches in the response.
+        Returns a list of (start_index, tool_cmd_type, re_match_object), sorted by position.
+
+        For serial mode, returns only the first match (earliest in text).
+        For parallel mode, returns all matches.
+        """
+        all_matches = []
+        for cmd_type, pattern in self._tool_regex_map.items():
+            flags = re.MULTILINE
+            if "WRITE" in cmd_type or "EDIT" in cmd_type:
+                flags |= re.DOTALL
+
+            if execution_mode == "parallel":
+                # Use finditer to catch multiple calls of the same type
+                for m in re.finditer(pattern, response, flags):
+                    all_matches.append((m.start(), cmd_type, m))
+            else:
+                # Serial mode: find first match for this regex pattern
+                m = re.search(pattern, response, flags)
+                if m:
+                    all_matches.append((m.start(), cmd_type, m))
+
+        # Sort by occurrence in the text for consistent execution order
+        all_matches.sort(key=lambda x: x[0])
+
+        if execution_mode == "serial" and all_matches:
+            all_matches = all_matches[:1]
+
+        return all_matches
+
+    def _execute_serial(self, response: str) -> ToolExecutionReport:
+        """
+        Finds and executes the first tool command in the response.
+        Returns a ToolExecutionReport.
+        """
+        parsed_calls = self._parse_tool_calls(response, "serial")
+        if not parsed_calls:
+            return ToolExecutionReport()
+
+        _, tool_cmd, match = parsed_calls[0]
+        file_path = match.group(2)
+
+        result_str = ""
+        if tool_cmd in ["!WRITE", "!EDIT"]:
+            result_str = execute_tool(tool_cmd, file_path, response)
+        else:
+            result_str = execute_tool(tool_cmd, file_path)
+        
+        return ToolExecutionReport(
+            results=[result_str],
+            executed_details=[(tool_cmd, result_str, file_path)],
+            has_results=True
+        )
+
+    def _execute_parallel(self, response: str) -> ToolExecutionReport:
+        """
+        Finds and executes ALL tool commands in the response.
+        Returns a ToolExecutionReport.
+        """
+        parsed_calls = self._parse_tool_calls(response, "parallel")
+        if not parsed_calls:
+            return ToolExecutionReport()
+
+        report = ToolExecutionReport()
+        for _, tool_cmd, match in parsed_calls:
+            file_path = match.group(2)
+            result_str = ""
+            if tool_cmd in ["!WRITE", "!EDIT"]:
+                result_str = execute_tool(tool_cmd, file_path, response)
+            else:
+                result_str = execute_tool(tool_cmd, file_path)
+            
+            report.results.append(result_str)
+            report.executed_details.append((tool_cmd, result_str, file_path))
+        report.has_results = bool(report.results)
+        return report
+
+    def dispatch(self, response: str, execution_mode: str) -> ToolExecutionReport:
+        if execution_mode == "parallel":
+            return self._execute_parallel(response)
+        return self._execute_serial(response)
 
 
 def execute_tool(command, arg, content=""):

@@ -93,7 +93,7 @@ class TestHarnessControllerRunTask:
             "File content is ready"
         ]
 
-        with patch('controller.execute_tool') as mock_execute:
+        with patch('tools.execute_tool') as mock_execute:
             mock_execute.return_value = "[SYSTEM OUTPUT: File content]"
 
             result = controller_instance.run_task("Read the file")
