@@ -5,7 +5,7 @@ This module handles building and refreshing the system prompt.
 """
 
 import os
-from tools import get_tools_instructions
+from tool_definitions import get_tools_instructions
 from AGENT import AGENT_md_INGESTIOR
 
 

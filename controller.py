@@ -1,6 +1,6 @@
 from brain import call_llm
 from terminal_history import terminal_history_upgrade
-from tools import get_tool_regex_map, ToolEngine
+from tools import ToolEngine
 from provider import ProviderManager
 from context import create_context_manager
 from topic import Topic
@@ -27,8 +27,6 @@ class HarnessController:
 
         # Type narrowed to non-None after RuntimeError
         self.current_provider = provider # type: ignore
-
-        self._tool_regex_map = get_tool_regex_map()
 
         self.persona = PersonaManager(persona_name, enable_context)
         self.context = create_context_manager() if enable_context else None

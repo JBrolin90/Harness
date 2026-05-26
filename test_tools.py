@@ -11,16 +11,16 @@ class TestGetToolsInstructions:
     """Tests for get_tools_instructions()"""
 
     def test_returns_string(self):
-        from tools import get_tools_instructions
+        from tool_definitions import get_tools_instructions
         result = get_tools_instructions()
         assert isinstance(result, str)
 
     def test_contains_available_tools_header(self):
-        from tools import get_tools_instructions
+        from tool_definitions import get_tools_instructions
         assert "AVAILABLE TOOLS" in get_tools_instructions()
 
     def test_contains_all_tool_commands(self):
-        from tools import get_tools_instructions
+        from tool_definitions import get_tools_instructions
         instructions = get_tools_instructions()
         assert "!READ" in instructions
         assert "!WRITE" in instructions
@@ -29,11 +29,11 @@ class TestGetToolsInstructions:
         assert "!EDIT" in instructions
 
     def test_contains_write_block_marker(self):
-        from tools import get_tools_instructions
+        from tool_definitions import get_tools_instructions
         assert "\x3c\x3c\x3cWRITE_BLOCK\x3e\x3e\x3e" in get_tools_instructions()
 
     def test_contains_edit_block_markers(self):
-        from tools import get_tools_instructions
+        from tool_definitions import get_tools_instructions
         ins = get_tools_instructions()
         assert "\x3c\x3c\x3cSEARCH_BLOCK\x3e\x3e\x3e" in ins
         assert "\x3c\x3c\x3cREPLACE_BLOCK\x3e\x3e\x3e" in ins
