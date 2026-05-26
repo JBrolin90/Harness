@@ -18,7 +18,7 @@ def main():
     ctrl = controller.HarnessController(args.provider, args.persona)
 
     print(f"Bob-Harness v1.5 initialized. \nBrain: \n  {ctrl.current_provider.name} \n  ({ctrl.current_provider.model})")
-    print(f"Persona: {ctrl.persona_name}")
+    print(f"Persona: {ctrl.persona.name}")
     print("Type 'exit' to quit.")
 
     while True:

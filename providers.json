@@ -5,6 +5,7 @@
         "url": "https://api.minimax.io/v1/text/chatcompletion_v2",
         "model": "MiniMax-M2.7",
         "api_key_env_var": "MINIMAX_API_KEY",
+        "execution_mode": "serial",
         "attributes": {}
     },
     {
@@ -13,6 +14,7 @@
         "url": "http://localhost:11434/api/chat",
         "model": "qwen2.5-coder:7b",
         "api_key_env_var": "OLLAMA_DUMMY_KEY",
+        "execution_mode": "serial",
         "attributes": {}
     }
 ]

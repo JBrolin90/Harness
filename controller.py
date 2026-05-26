@@ -1,12 +1,11 @@
-import os
 import re
-from typing import Optional
 from brain import call_llm
-from tools import execute_tool, get_tools_instructions
-from AGENT import AGENT_md_INGESTIOR
+from tools import execute_tool
 from terminal_history import terminal_history_upgrade
 from provider import ProviderManager
 from context import create_context_manager
+from topic import Topic
+from system_prompt import SystemPrompt
 from persona import PersonaManager
 from session import SessionManager
 
@@ -30,56 +29,42 @@ class HarnessController:
         # Type narrowed to non-None after RuntimeError
         self.current_provider = provider
 
+        # Define regexes for tool detection once
+        self._tool_regex_map = {
+            "!WRITE": r'^\s*!(WRITE)\s+(\S+)',
+            "!EDIT":  r'^\s*!(EDIT)\s+(\S+)',
+            "!READ":  r'^\s*!(READ)\s+(\S+)',
+            "!BASH":  r'^\s*!(BASH)\s+(.+)',
+            "!LS":    r'^\s*!(LS)\s+(\S+)'
+        }
+
         self.persona = PersonaManager(persona_name, enable_context)
         self.context = create_context_manager() if enable_context else None
-        self.user_specified_topic: Optional[str] = None
+        self.topic = Topic()
         self.session = SessionManager()
-        self.system_prompt = self._build_system_prompt()
-
-    def _build_system_prompt(self) -> str:
-        persona_text = self.persona.get_prompt_fragment()
-        memory_text = self.persona.get_memory_fragment()
-
-        # Load project.md from CWD as the shared source of truth
-        project_text = ""
-        project_path = os.path.join(os.getcwd(), "project.md")
-        if os.path.isfile(project_path):
-            try:
-                with open(project_path, 'r') as f:
-                    project_text = f"\n\nProject Context (project.md):\n{f.read()}"
-            except Exception:
-                pass
-
-        context_info = self.context.get_context_summary() if self.context else ""
-
-        return f"""
-        {persona_text}{memory_text}{project_text}
-        Current Working Directory: {os.getcwd()}
-        {context_info}
-        You have access to a local file system via your Harness.
-        {get_tools_instructions()}
-        {AGENT_md_INGESTIOR()}
-        """
+        self.system_prompt = SystemPrompt(
+            persona_prompt_fn=self.persona.get_prompt_fragment,
+            memory_prompt_fn=self.persona.get_memory_fragment,
+            context_summary_fn=self.context.get_context_summary if self.context else None,
+        )
 
     def run_task(self, prompt: str) -> str:
         """Execute a task with the given prompt. Returns the final response."""
         # Refresh system prompt to include latest project.md/memory.md state
-        self.system_prompt = self._build_system_prompt()
+        system_prompt = self.system_prompt.build()
 
         # Check if user explicitly stated a topic
-        if self.user_specified_topic is None:
-            detected = self._detect_user_topic(prompt)
-            if detected:
-                self.user_specified_topic = detected
-                if self.context:
-                    self.context.set_topic(detected)
+        if not self.topic.is_set:
+            detected = self.topic.detect_from_prompt(prompt)
+            if detected and self.context:
+                self.context.set_topic(detected)
 
         self.session.add_user_message(prompt)
 
         print(f"\n{self.session.get_stats()}")
 
         response = call_llm(
-            self.session.conversation_history, self.system_prompt, self.current_provider
+            self.session.conversation_history, system_prompt, self.current_provider
         )
         print(f"Bob: {response}")
         self.session.add_assistant_message(response)
@@ -90,108 +75,58 @@ class HarnessController:
         # The Autonomous Tool Loop (ReAct) - serial execution
         iteration = 0
         while True:
-            system_result, file_path = self._execute_next_tool(response)
+            combined_system_results = []
+            executed_tools_details = [] # Stores (tool_cmd, result, file_path) for compaction
 
-            if system_result:
+            if self.current_provider.execution_mode == "parallel":
+                combined_system_results, executed_tools_details = self._execute_tools_parallel(response)
+            else: # serial mode
+                system_result, file_path, tool_cmd = self._execute_tool_serial(response)
+                if system_result:
+                    combined_system_results.append(system_result)
+                    executed_tools_details.append((tool_cmd, system_result, file_path))
+
+            if combined_system_results:
                 iteration += 1
                 print(f"\n[Harness feeding system result back to Bob... {self.session.get_stats()}]")
 
-                self.session.add_tool_result(system_result, file_path)
+                full_result_text = "\n\n".join(combined_system_results)
+                self.session.add_tool_result(full_result_text, None) # file_path is handled by summarizer
+
+                # History Compaction for any successful writes/edits in this batch
+                for tool_cmd, res, file_path_for_compaction in executed_tools_details:
+                    if tool_cmd in ["!WRITE", "!EDIT"] and "Successfully" in res:
+                        # Find the last assistant message that contains the original tool call
+                        # This assumes the tool call was in the immediately preceding assistant message
+                        # A more robust solution might involve tracking message IDs or more complex parsing
+                        for i in range(len(self.session.conversation_history) - 2, -1, -1):
+                            msg = self.session.conversation_history[i]
+                            if msg["role"] == "assistant" and (tool_cmd in msg["content"] and file_path_for_compaction in msg["content"]):
+                                compacted = re.sub(r'<<<.*?>>>', '[BLOCK CONTENT SAVED TO DISK]', msg["content"], flags=re.DOTALL)
+                                self.session.conversation_history[i]["content"] = compacted
+                                break
 
                 response = call_llm(
-                    self.session.conversation_history, self.system_prompt, self.current_provider
+                    self.session.conversation_history, system_prompt, self.current_provider
                 )
                 print(f"Bob: {response}")
                 print(f"[Model: {self.current_provider.model}] {self.session.get_stats()} (iteration {iteration})")
-                self.session.add_assistant_message(response)
+                self.session.add_assistant_message(response) # Add the new response after tool execution
 
                 # Save session after each iteration
                 self.session.save()
             else:
                 break
 
-        return response
+        return response # Return the final response from the LLM
 
-    def _detect_user_topic(self, prompt: str) -> Optional[str]:
-        """
-        Try to detect if the user explicitly stated a topic.
-        Looks for patterns like: 'topic: foo', 'about: foo', 'the topic is foo', etc.
-        Returns the topic string or None if not detected.
-        """
-        prompt_lower = prompt.lower()
-        
-        # Pattern 1: explicit topic markers
-        explicit_patterns = [
-            r'topic:\s*(\w+)',
-            r'about:\s*(\w+)',
-            r'regarding:\s*(\w+)',
-            r'the topic (?:is|should be)\s+(\w+)',
-        ]
-        for pattern in explicit_patterns:
-            match = re.search(pattern, prompt_lower)
-            if match:
-                return match.group(1)
-        
-        # Pattern 2: single-word topic at start (if first 2 words aren't common phrases)
-        words = prompt.split()
-        if len(words) >= 2:
-            first_two = ' '.join(words[:2]).lower()
-            if first_two not in ("can you", "please", "i want", "i need", "help me", "now please"):
-                topic_word = words[0].strip('.,!?').lower()
-                if len(topic_word) > 2 and topic_word not in ("hey", "hi", "hello", "yo", "now", "just"):
-                    return topic_word
-        
-        return None
-
-    def _update_topic_from_response(self, response: str) -> None:
-        """Update topic from agent response if user hasn't specified one."""
-        if self.user_specified_topic is not None or not self.context:
-            return
-        
-        patterns = [
-            r'(?:topic|about|regarding):\s*(\w+)',
-            r"(?:I'll|I will) (?:work on|focus on|address|help with)\s+(\w+)",
-            r"(?:I'm|I am) (?:going to |about to )?(?:work on |focus on |help with )?(\w+)",
-        ]
-        
-        for pattern in patterns:
-            match = re.search(pattern, response, re.IGNORECASE)
-            if match:
-                topic = match.group(1).lower()
-                self.context.set_topic(topic)
-                return
-        
-        # Fallback: extract first significant word from response
-        words = response.split()
-        for word in words[:10]:
-            cleaned = re.sub(r'[^\w]', '', word).lower()
-            if len(cleaned) > 3 and cleaned not in ("this", "that", "here", "there", "going", "working", "helping"):
-                self.context.set_topic(cleaned)
-                return
-
-    def _print_topic(self) -> None:
-        """Print the current topic if set."""
-        if self.context:
-            topic = self.context.get_topic()
-            if topic:
-                lock_indicator = " [LOCKED]" if self.user_specified_topic else ""
-                print(f"[Topic: {topic}]{lock_indicator}")
-
-    def _execute_next_tool(self, response: str) -> tuple[str | None, str | None]:
+    def _execute_tool_serial(self, response: str) -> tuple[str | None, str | None, str | None]:
         """
         Find and execute the first tool command in the response.
-        Returns (result, file_path) tuple - file_path is the path argument used.
+        Returns (result, file_path, tool_cmd) tuple.
         """
-        regex_map = {
-            "!WRITE": r'^\s*!(WRITE)\s+(\S+)',
-            "!EDIT":  r'^\s*!(EDIT)\s+(\S+)',
-            "!READ":  r'^\s*!(READ)\s+(\S+)',
-            "!BASH":  r'^\s*!(BASH)\s+(.+)',
-            "!LS":    r'^\s*!(LS)\s+(\S+)'
-        }
-
         matches = []
-        for cmd_type, pattern in regex_map.items():
+        for cmd_type, pattern in self._tool_regex_map.items():
             flags = re.MULTILINE
             if "WRITE" in cmd_type or "EDIT" in cmd_type:
                 flags |= re.DOTALL
@@ -200,20 +135,64 @@ class HarnessController:
                 matches.append((m.start(), cmd_type, m))
 
         if not matches:
-            return (None, None)
+            return (None, None, None)
 
         matches.sort(key=lambda x: x[0])
         _, tool_cmd, match = matches[0]
         file_path = match.group(2)
 
         if tool_cmd in ["!WRITE", "!EDIT"]:
-            return (execute_tool(tool_cmd, file_path, response), file_path)
+            return (execute_tool(tool_cmd, file_path, response), file_path, tool_cmd)
         else:
-            return (execute_tool(tool_cmd, file_path), None)
+            return (execute_tool(tool_cmd, file_path), file_path, tool_cmd)
+
+    def _execute_next_tool(self, response: str) -> tuple[str | None, str | None]:
+        """Backward-compatible wrapper returning 2-tuple for non-WRITE/EDIT tools."""
+        result, file_path, tool_cmd = self._execute_tool_serial(response)
+        # Original behavior: only WRITE/EDIT returned file_path
+        return (result, file_path if tool_cmd in ["!WRITE", "!EDIT"] else None)
+
+
+    def _execute_tools_parallel(self, response: str) -> tuple[list[str], list[tuple[str, str, str]]]:
+        """
+        Find and execute ALL tool commands in the response.
+        Returns (list of results, list of (tool_cmd, result, file_path) for compaction).
+        """
+        all_matches = []
+        for cmd_type, pattern in self._tool_regex_map.items():
+            flags = re.MULTILINE
+            if "WRITE" in cmd_type or "EDIT" in cmd_type:
+                flags |= re.DOTALL
+            
+            # Use finditer to catch multiple calls of the same type
+            for m in re.finditer(pattern, response, flags):
+                all_matches.append((m.start(), cmd_type, m))
+
+        if not all_matches:
+            return ([], [])
+
+        # Sort by occurrence in the text
+        all_matches.sort(key=lambda x: x[0])
+
+        combined_system_results = []
+        executed_tools_details = [] # (tool_cmd, result, file_path)
+
+        for _, tool_cmd, match in all_matches:
+            file_path = match.group(2)
+            if tool_cmd in ["!WRITE", "!EDIT"]:
+                result = execute_tool(tool_cmd, file_path, response)
+            else:
+                result = execute_tool(tool_cmd, file_path)
+            
+            combined_system_results.append(result)
+            executed_tools_details.append((tool_cmd, result, file_path))
+
+        return (combined_system_results, executed_tools_details)
 
     def reset(self):
-        """Clear conversation history to start fresh."""
+        """Clear conversation history and topic to start fresh."""
         self.session.clear()
+        self.topic.reset()
         if self.context:
             self.context.reset_session()
 

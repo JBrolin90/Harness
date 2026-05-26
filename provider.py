@@ -11,6 +11,7 @@ class ProviderConfig:
     url: str
     model: str
     api_key_env_var: Optional[str] = None # Name of the environment variable holding the API key
+    execution_mode: str = "serial"  # "serial" or "parallel"
     attributes: dict = field(default_factory=dict)
 
 class ProviderManager:

@@ -12,14 +12,16 @@ class TestHarnessControllerImport:
 
     @patch('controller.terminal_history_upgrade')
     @patch('controller.ProviderManager')
-    def test_harness_controller_class_exists(self, mock_pm_class, mock_terminal):
+    @patch('system_prompt.AGENT_md_INGESTIOR', return_value="")
+    def test_harness_controller_class_exists(self, mock_agent, mock_pm_class, mock_terminal):
         """HarnessController class should be accessible from controller module."""
         from controller import HarnessController
         assert HarnessController is not None
 
     @patch('controller.terminal_history_upgrade')
     @patch('controller.ProviderManager')
-    def test_harness_controller_default_provider(self, mock_pm_class, mock_terminal):
+    @patch('system_prompt.AGENT_md_INGESTIOR', return_value="")
+    def test_harness_controller_default_provider(self, mock_agent, mock_pm_class, mock_terminal):
         """HarnessController() should default to cloud-pro provider."""
         mock_pm_instance = MagicMock()
         mock_pm_class.return_value = mock_pm_instance
@@ -36,7 +38,8 @@ class TestHarnessControllerImport:
 
     @patch('controller.terminal_history_upgrade')
     @patch('controller.ProviderManager')
-    def test_harness_controller_named_provider(self, mock_pm_class, mock_terminal):
+    @patch('system_prompt.AGENT_md_INGESTIOR', return_value="")
+    def test_harness_controller_named_provider(self, mock_agent, mock_pm_class, mock_terminal):
         """HarnessController('local-coder') should use specified provider."""
         mock_pm_instance = MagicMock()
         mock_pm_class.return_value = mock_pm_instance
@@ -59,7 +62,7 @@ class TestHarnessControllerRunTask:
         """Create a mocked controller instance."""
         with patch('controller.terminal_history_upgrade'), \
              patch('controller.ProviderManager') as mock_pm_class, \
-             patch('controller.AGENT_md_INGESTIOR', return_value=""):
+             patch('system_prompt.AGENT_md_INGESTIOR', return_value=""):
             mock_pm_instance = MagicMock()
             mock_pm_class.return_value = mock_pm_instance
             mock_provider = MagicMock()
@@ -68,7 +71,7 @@ class TestHarnessControllerRunTask:
             from controller import HarnessController
             ctrl = HarnessController(enable_context=False)
             ctrl.current_provider = MagicMock()
-            ctrl.system_prompt = "Test prompt"
+            ctrl.system_prompt = MagicMock(build=MagicMock(return_value="Test prompt"))
             ctrl.session.conversation_history = []
             yield ctrl
 
@@ -125,7 +128,7 @@ class TestModuleLevelCompatibility:
 
     @patch('controller.terminal_history_upgrade')
     @patch('controller.ProviderManager')
-    @patch('controller.AGENT_md_INGESTIOR')
+    @patch('system_prompt.AGENT_md_INGESTIOR')
     def test_init_creates_global_controller(self, mock_agent, mock_pm_class, mock_terminal):
         """module init() should create a global _controller instance."""
         mock_pm_instance = MagicMock()
@@ -163,7 +166,7 @@ class TestControllerReset:
     def controller_instance(self):
         with patch('controller.terminal_history_upgrade'), \
              patch('controller.ProviderManager') as mock_pm_class, \
-             patch('controller.AGENT_md_INGESTIOR', return_value=""):
+             patch('system_prompt.AGENT_md_INGESTIOR', return_value=""):
             mock_pm_instance = MagicMock()
             mock_pm_class.return_value = mock_pm_instance
             mock_provider = MagicMock()

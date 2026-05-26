@@ -14,7 +14,8 @@ class TestHarnessControllerInit:
 
     @patch('controller.terminal_history_upgrade')
     @patch('controller.ProviderManager')
-    def test_init_creates_instance_state(self, mock_pm_class, mock_terminal):
+    @patch('system_prompt.AGENT_md_INGESTIOR', return_value="")
+    def test_init_creates_instance_state(self, mock_agent, mock_pm_class, mock_terminal):
         """__init__() should create instance attributes, not module globals"""
         mock_pm_instance = MagicMock()
         mock_pm_class.return_value = mock_pm_instance
@@ -23,15 +24,14 @@ class TestHarnessControllerInit:
         mock_provider.model = "test-model"
         mock_pm_instance.get_provider.return_value = mock_provider
 
-        with patch('controller.AGENT_md_INGESTIOR', return_value=""):
-            from controller import HarnessController
-            ctrl = HarnessController()
+        from controller import HarnessController
+        ctrl = HarnessController()
 
-            assert hasattr(ctrl, 'current_provider')
-            assert hasattr(ctrl, 'system_prompt')
-            assert hasattr(ctrl, 'session')
-            assert ctrl.current_provider == mock_provider
-            assert isinstance(ctrl.session.conversation_history, list)
+        assert hasattr(ctrl, 'current_provider')
+        assert hasattr(ctrl, 'system_prompt')
+        assert hasattr(ctrl, 'session')
+        assert ctrl.current_provider == mock_provider
+        assert isinstance(ctrl.session.conversation_history, list)
 
     @patch('controller.terminal_history_upgrade')
     @patch('controller.ProviderManager')
@@ -47,25 +47,24 @@ class TestHarnessControllerInit:
 
     @patch('controller.terminal_history_upgrade')
     @patch('controller.ProviderManager')
-    @patch('controller.AGENT_md_INGESTIOR')
+    @patch('system_prompt.AGENT_md_INGESTIOR', return_value="")
     def test_init_system_prompt_contains_tools(self, mock_agent, mock_pm_class, mock_terminal):
         """__init__() should build system prompt with tools instructions"""
         mock_pm_instance = MagicMock()
         mock_pm_class.return_value = mock_pm_instance
         mock_provider = MagicMock()
         mock_pm_instance.get_provider.return_value = mock_provider
-        mock_agent.return_value = ""
 
         from controller import HarnessController
         ctrl = HarnessController()
 
-        assert "AVAILABLE TOOLS" in ctrl.system_prompt
-        assert "!READ" in ctrl.system_prompt
-        assert "!WRITE" in ctrl.system_prompt
+        assert "AVAILABLE TOOLS" in ctrl.system_prompt.current
+        assert "!READ" in ctrl.system_prompt.current
+        assert "!WRITE" in ctrl.system_prompt.current
 
     @patch('controller.terminal_history_upgrade')
     @patch('controller.ProviderManager')
-    @patch('controller.AGENT_md_INGESTIOR')
+    @patch('system_prompt.AGENT_md_INGESTIOR', return_value="")
     def test_init_selects_named_provider(self, mock_agent, mock_pm_class, mock_terminal):
         """__init__() should use the provider specified by name"""
         mock_pm_instance = MagicMock()
@@ -82,14 +81,13 @@ class TestHarnessControllerInit:
 
     @patch('controller.terminal_history_upgrade')
     @patch('controller.ProviderManager')
-    @patch('controller.AGENT_md_INGESTIOR')
+    @patch('system_prompt.AGENT_md_INGESTIOR', return_value="")
     def test_reset_clears_history(self, mock_agent, mock_pm_class, mock_terminal):
         """reset() should clear conversation history"""
         mock_pm_instance = MagicMock()
         mock_pm_class.return_value = mock_pm_instance
         mock_provider = MagicMock()
         mock_pm_instance.get_provider.return_value = mock_provider
-        mock_agent.return_value = ""
 
         from controller import HarnessController
         ctrl = HarnessController()
@@ -108,7 +106,7 @@ class TestHarnessControllerRunTask:
         """Create a mocked controller instance for testing"""
         with patch('controller.terminal_history_upgrade'), \
              patch('controller.ProviderManager') as mock_pm_class, \
-             patch('controller.AGENT_md_INGESTIOR', return_value=""):
+             patch('system_prompt.AGENT_md_INGESTIOR', return_value=""):
             mock_pm_instance = MagicMock()
             mock_pm_class.return_value = mock_pm_instance
             mock_provider = MagicMock()
@@ -118,7 +116,7 @@ class TestHarnessControllerRunTask:
             # Disable context tracking for basic tool execution tests
             ctrl = HarnessController(enable_context=False)
             ctrl.current_provider = MagicMock()
-            ctrl.system_prompt = "Test prompt"
+            ctrl.system_prompt = MagicMock(build=MagicMock(return_value="Test prompt"))
             ctrl.session.conversation_history = []
             yield ctrl
 
@@ -208,7 +206,7 @@ That should help."""
 
         controller.run_task("Read and write files")
 
-        # Only one tool call despite two tools in response
+        # Only one tool call despite two tools in answer_response
         assert mock_execute.call_count == 1
 
 
@@ -217,14 +215,13 @@ class TestControllerModuleLevelFunctions:
 
     @patch('controller.terminal_history_upgrade')
     @patch('controller.ProviderManager')
-    @patch('controller.AGENT_md_INGESTIOR')
+    @patch('system_prompt.AGENT_md_INGESTIOR', return_value="")
     def test_init_creates_global_controller(self, mock_agent, mock_pm_class, mock_terminal):
         """init() should create a global _controller instance"""
         mock_pm_instance = MagicMock()
         mock_pm_class.return_value = mock_pm_instance
         mock_provider = MagicMock()
         mock_pm_instance.get_provider.return_value = mock_provider
-        mock_agent.return_value = ""
 
         import controller
         controller.init()
@@ -234,14 +231,13 @@ class TestControllerModuleLevelFunctions:
 
     @patch('controller.terminal_history_upgrade')
     @patch('controller.ProviderManager')
-    @patch('controller.AGENT_md_INGESTIOR')
+    @patch('system_prompt.AGENT_md_INGESTIOR', return_value="")
     def test_run_task_uses_global_controller(self, mock_agent, mock_pm_class, mock_terminal):
         """module run_task() should delegate to global controller"""
         mock_pm_instance = MagicMock()
         mock_pm_class.return_value = mock_pm_instance
         mock_provider = MagicMock()
         mock_pm_instance.get_provider.return_value = mock_provider
-        mock_agent.return_value = ""
 
         with patch('controller.call_llm', return_value="Response") as mock_llm:
             import controller
@@ -253,14 +249,13 @@ class TestControllerModuleLevelFunctions:
 
     @patch('controller.terminal_history_upgrade')
     @patch('controller.ProviderManager')
-    @patch('controller.AGENT_md_INGESTIOR')
+    @patch('system_prompt.AGENT_md_INGESTIOR', return_value="")
     def test_run_task_raises_without_init(self, mock_agent, mock_pm_class, mock_terminal):
         """module run_task() should raise if init() not called"""
         mock_pm_instance = MagicMock()
         mock_pm_class.return_value = mock_pm_instance
         mock_provider = MagicMock()
         mock_pm_instance.get_provider.return_value = mock_provider
-        mock_agent.return_value = ""
 
         import controller
         # Reset to simulate fresh import without init
@@ -335,7 +330,7 @@ class TestExecuteNextTool:
     def controller(self):
         with patch('controller.terminal_history_upgrade'), \
              patch('controller.ProviderManager') as mock_pm_class, \
-             patch('controller.AGENT_md_INGESTIOR', return_value=""):
+             patch('system_prompt.AGENT_md_INGESTIOR', return_value=""):
             mock_pm_instance = MagicMock()
             mock_pm_class.return_value = mock_pm_instance
             mock_provider = MagicMock()

@@ -15,6 +15,10 @@ class PersonaManager:
         self.persona_name = persona_name
         self.enable_context = enable_context
 
+    @property
+    def name(self) -> str:
+        return self.persona_name
+
     def get_prompt_fragment(self) -> str:
         """Load and return the persona definition for the system prompt."""
         persona_path = os.path.join(PERSONAS_DIR, self.persona_name, "persona.md")
