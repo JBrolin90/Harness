@@ -1,7 +1,7 @@
 import re
 from brain import call_llm
-from tools import execute_tool
 from terminal_history import terminal_history_upgrade
+from tools import execute_tool, get_tool_regex_map
 from provider import ProviderManager
 from context import create_context_manager
 from topic import Topic
@@ -29,14 +29,7 @@ class HarnessController:
         # Type narrowed to non-None after RuntimeError
         self.current_provider = provider
 
-        # Define regexes for tool detection once
-        self._tool_regex_map = {
-            "!WRITE": r'^\s*!(WRITE)\s+(\S+)',
-            "!EDIT":  r'^\s*!(EDIT)\s+(\S+)',
-            "!READ":  r'^\s*!(READ)\s+(\S+)',
-            "!BASH":  r'^\s*!(BASH)\s+(.+)',
-            "!LS":    r'^\s*!(LS)\s+(\S+)'
-        }
+        self._tool_regex_map = get_tool_regex_map()
 
         self.persona = PersonaManager(persona_name, enable_context)
         self.context = create_context_manager() if enable_context else None

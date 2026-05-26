@@ -2,6 +2,16 @@ import subprocess
 import os
 import re
 
+# Define regexes for tool detection
+_tool_regex_map = {
+    "!WRITE": r'^\s*!(WRITE)\s+(\S+)',
+    "!EDIT":  r'^\s*!(EDIT)\s+(\S+)',
+    "!READ":  r'^\s*!(READ)\s+(\S+)',
+    "!BASH":  r'^\s*!(BASH)\s+(.+)',
+    "!LS":    r'^\s*!(LS)\s+(\S+)'
+}
+
+
 def get_tools_instructions():
     return """
         AVAILABLE TOOLS:
@@ -40,6 +50,10 @@ def get_tools_instructions():
         - The single newline immediately following <<<WRITE_BLOCK>>> and the single newline immediately preceding the closing <<< are considered visual padding and are STRIPPED. To start or end a file with an intentional newline, add an extra one.
         - IMPORTANT: Only perform ONE tool call per response. Wait for the system output before proceeding to the next step.
     """
+
+def get_tool_regex_map():
+    """Returns the dictionary of tool command regex patterns."""
+    return _tool_regex_map
 
 def _validate_path(file_path: str) -> str:
     """
