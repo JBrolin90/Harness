@@ -3,7 +3,6 @@ from terminal_history import terminal_history_upgrade
 from tools import ToolEngine
 from provider import ProviderManager
 from context import create_context_manager
-from topic import Topic
 from system_prompt import SystemPrompt
 from persona import PersonaManager
 from session import SessionManager
@@ -30,7 +29,6 @@ class HarnessController:
 
         self.persona = PersonaManager(persona_name, enable_context)
         self.context = create_context_manager() if enable_context else None
-        self.topic = Topic()
         self.session = SessionManager()
         self.system_prompt = SystemPrompt(
             persona_prompt_fn=self.persona.get_prompt_fragment,
@@ -44,11 +42,9 @@ class HarnessController:
         # Refresh system prompt to include latest project.md/memory.md state
         system_prompt = self.system_prompt.build()
 
-        # Check if user explicitly stated a topic
-        if not self.topic.is_set:
-            detected = self.topic.detect_from_prompt(prompt)
-            if detected and self.context:
-                self.context.set_topic(detected)
+        # Detect topic from prompt via context
+        if self.context:
+            self.context.get_context(prompt)
 
         self.session.add_user_message(prompt)
 
@@ -89,9 +85,8 @@ class HarnessController:
         return response # Return the final response from the LLM
 
     def reset(self):
-        """Clear conversation history and topic to start fresh."""
+        """Clear conversation history and context to start fresh."""
         self.session.clear()
-        self.topic.reset()
         if self.context:
             self.context.reset_session()
 

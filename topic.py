@@ -9,56 +9,51 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 
-@dataclass
-class TopicState:
-    """Holds topic state - name, lock status, and metadata."""
-    name: str
-    locked: bool = False  # True if user explicitly stated the topic
+@dataclass 
+class Topic:
+    """Holds topic state - name, lock status, and metadata.
+    
+    This is the main entry point for topic management.
+    """
+    _name: Optional[str] = None
+    _locked: bool = False
     relevant_files: list[str] = field(default_factory=list)
     key_facts: list[str] = field(default_factory=list)
-
-
-class Topic:
-    """
-    Topic detection and management.
     
-    Responsibilities:
-    - Detect topics from user prompts
-    - Detect topics from agent responses
-    - Track locked/unlocked topic state
-    - Provide formatted output for display
-    """
-
     # Common phrases to skip when detecting single-word topics
     SKIP_PHRASES = frozenset({
         "can you", "please", "i want", "i need", "help me", "now please",
         "hey there", "hi there", "hello there",
     })
-
+    
     # Topics to skip during detection
     SKIP_WORDS = frozenset({
         "hey", "hi", "hello", "yo", "now", "just", "this", "that", "here", 
         "there", "going", "working", "helping",
     })
 
-    def __init__(self) -> None:
-        self._user_specified: Optional[str] = None
-        self._state: Optional[TopicState] = None
-
     @property
     def is_set(self) -> bool:
         """Check if a topic has been set."""
-        return self._state is not None
-
+        return self._name is not None
+    
     @property
     def name(self) -> Optional[str]:
         """Get current topic name."""
-        return self._state.name if self._state else None
+        return self._name
+    
+    @name.setter
+    def name(self, value: str) -> None:
+        self._name = value
 
     @property
     def is_locked(self) -> bool:
         """Check if topic is locked (user-specified)."""
-        return self._user_specified is not None
+        return self._locked
+    
+    @is_locked.setter
+    def is_locked(self, value: bool) -> None:
+        self._locked = value
 
     def detect_from_prompt(self, prompt: str) -> Optional[str]:
         """
@@ -94,7 +89,7 @@ class Topic:
 
     def detect_from_response(self, response: str) -> None:
         """Update topic from agent response if user hasn't specified one."""
-        if self.is_locked or not self.is_set:
+        if self._locked or not self.is_set:
             return
         
         patterns = [
@@ -118,28 +113,29 @@ class Topic:
 
     def set(self, topic_name: str) -> None:
         """Set or update the topic. Won't override locked topics."""
-        if self.is_locked:
+        if self._locked:
             return
-        if self._state is None or self._state.name != topic_name:
-            self._state = TopicState(name=topic_name)
-            print(f"[Topic: Now tracking: {topic_name}]")
+        self._name = topic_name
+        print(f"[Topic: Now tracking: {topic_name}]")
 
     def lock(self, topic_name: str) -> None:
         """Set topic as user-specified (locked)."""
-        self._user_specified = topic_name
-        self._state = TopicState(name=topic_name, locked=True)
+        self._name = topic_name
+        self._locked = True
         print(f"[Topic: User stated: {topic_name}]")
 
     def reset(self) -> None:
         """Reset all topic state."""
-        self._user_specified = None
-        self._state = None
+        self._name = None
+        self._locked = False
+        self.relevant_files = []
+        self.key_facts = []
 
     def display(self) -> str:
         """Get formatted topic string for printing."""
-        if self._state:
-            lock_str = " [LOCKED]" if self._state.locked else ""
-            return f"[Topic: {self._state.name}]{lock_str}"
+        if self._name:
+            lock_str = " [LOCKED]" if self._locked else ""
+            return f"[Topic: {self._name}]{lock_str}"
         return ""
 
     def _match_patterns(

@@ -63,6 +63,7 @@ class SystemPrompt:
         {AGENT_md_INGESTIOR()}
         """
         self._cached = prompt
+#        print(f"\n================= SYSTEM PROMPT =================\n{prompt}\n================= SYSTEM PROMPT =================\n")
         return prompt
 
     @property
