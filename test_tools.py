@@ -108,15 +108,11 @@ class TestToolEngineDispatch:
     """Tests for ToolEngine.dispatch()."""
 
     def test_dispatch_parses_valid_json(self):
-        """dispatch should parse valid JSON tool call."""
+        """dispatch should parse valid JSON tool call (raw JSON from native function calling)."""
         from tools import ToolEngine
         engine = ToolEngine()
-        response = '''
-        Let me read that file:
-        ```json
-        {"name": "read_file", "arguments": {"path": "test.txt"}}
-        ```
-        '''
+        # Raw JSON response from structured tool calling API
+        response = '{"name": "read_file", "arguments": {"path": "test.txt"}}'
         with patch('tools._execute_read', return_value="[OK]"):
             with patch('tools._validate_path', return_value="/cwd/test.txt"):
                 result = engine.dispatch(response)
