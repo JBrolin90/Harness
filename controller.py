@@ -1,5 +1,5 @@
 from brain import call_llm
-from tools import ToolEngine
+from tools import tool_dispatch
 from terminal_history import terminal_history_upgrade
 from provider import ProviderManager
 from systemprompt import build_system_prompt
@@ -12,7 +12,7 @@ class HarnessController:
         terminal_history_upgrade()
 
         self.current_provider = ProviderManager().get_provider(provider_name)
-        self.tool_engine = ToolEngine()
+        self.tool_engine = tool_dispatch
         self.system_prompt = ""
         self.conversation_history = []
 
@@ -33,7 +33,7 @@ class HarnessController:
         # The Autonomous Tool Loop (ReAct)
         iteration = 0
         while True:
-            system_result = self.tool_engine.dispatch(response)
+            system_result = self.tool_engine(response)
 
             if system_result:
                 iteration += 1

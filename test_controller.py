@@ -66,9 +66,7 @@ class TestHarnessControllerRunTask:
             ctrl.current_provider = MagicMock()
             ctrl.system_prompt = "Test prompt"
             ctrl.conversation_history = []
-            ctrl.tool_engine = MagicMock()
-            # dispatch should return None by default (no tool call) to exit the loop
-            ctrl.tool_engine.dispatch.return_value = None
+            ctrl.tool_engine = MagicMock(return_value=None)
             yield ctrl
 
     @patch('controller.call_llm')
@@ -102,15 +100,15 @@ class TestHarnessControllerRunTask:
             "[SYSTEM OUTPUT: File content]",  # tool result fed back
             "Final response after tool"  # final response after tool
         ]
-        # First dispatch returns tool result (truthy), second dispatch returns None (no tool call)
-        controller_instance.tool_engine.dispatch.side_effect = [
+        # First call returns tool result (truthy), second call returns None (no tool call)
+        controller_instance.tool_engine.side_effect = [
             "[SYSTEM OUTPUT: File content]",
             None
         ]
 
         controller_instance.run_task("Read the file")
 
-        assert controller_instance.tool_engine.dispatch.call_count >= 1
+        assert controller_instance.tool_engine.call_count >= 1
 
     @patch('controller.call_llm')
     def test_run_task_returns_final_response(self, mock_call_llm, controller_instance):
@@ -189,16 +187,14 @@ class TestToolEngineIntegration:
             ctrl = HarnessController()
             return ctrl
 
-    def test_controller_has_tool_engine(self, controller):
-        """Controller should have a tool_engine attribute."""
-        from tools import ToolEngine
+    def test_controller_has_tool_engine_function(self, controller):
+        """Controller should have tool_engine as function reference."""
+        from tools import tool_dispatch
         assert hasattr(controller, 'tool_engine')
-        assert isinstance(controller.tool_engine, ToolEngine)
+        assert controller.tool_engine == tool_dispatch
 
-    def test_tool_engine_dispatch_returns_result(self, controller):
-        """ToolEngine.dispatch should return tool result or None."""
-        from tools import ToolEngine
-        engine = ToolEngine()
-
-        result = engine.dispatch("Plain text, no tool")
+    def test_tool_engine_is_callable_function(self, controller):
+        """tool_dispatch should be callable and return None for plain text."""
+        from tools import tool_dispatch
+        result = tool_dispatch("Plain text, no tool")
         assert result is None
