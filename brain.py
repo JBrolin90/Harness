@@ -1,4 +1,5 @@
 import requests
+import json
 import os
 from provider import ProviderConfig
 
@@ -24,6 +25,10 @@ def call_llm(history, system_prompt, config: ProviderConfig):
         "stream": config.attributes.get("stream", False)
     }
     
+    # Add tools if provider supports native function calling
+    if config.tools:
+        payload["tools"] = config.tools
+    
     try:
         response = requests.post(config.url, headers=headers, json=payload, timeout=180) 
         response.raise_for_status()
@@ -31,12 +36,28 @@ def call_llm(history, system_prompt, config: ProviderConfig):
         
         # Handle MiniMax/OpenAI vs Ollama formats
         if config.provider_type == "minimax" or 'choices' in data:
-            # MiniMax / OpenAI style
-            return data['choices'][0]['message']['content']
+            # MiniMax / OpenAI style - check for tool calls
+            message = data['choices'][0]['message']
+            content = message.get('content', '')
+            
+            # Check if model made a tool call (OpenAI style)
+            if 'tool_calls' in message and message['tool_calls']:
+                tool_call = message['tool_calls'][0]
+                tool_name = tool_call['function']['name']
+                arguments = tool_call['function']['arguments']
+                
+                # Parse arguments if they're a JSON string
+                if isinstance(arguments, str):
+                    arguments = json.loads(arguments)
+                
+                return json.dumps({"name": tool_name, "arguments": arguments})
+            
+            return content
         else:
             # Ollama style
             return data['message']['content']
         
     except Exception as e:
-        error_details = response.text if 'response' in locals() else "Connection failed"
+        print(f"Error processing request to {config.url}: {e}")
+        error_details = str(e)
         return f"[BRAIN ERROR: {str(e)}\nDetails: {error_details}]"

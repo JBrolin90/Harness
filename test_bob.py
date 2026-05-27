@@ -70,6 +70,8 @@ class TestHarnessControllerRunTask:
             ctrl.current_provider = MagicMock()
             ctrl.system_prompt = "Test prompt"
             ctrl.conversation_history = []
+            # Mock tool_engine entirely to avoid binding issues
+            ctrl.tool_engine = MagicMock()
             yield ctrl
 
     @patch('controller.call_llm')
@@ -86,17 +88,17 @@ class TestHarnessControllerRunTask:
     def test_run_task_with_tool_execution(self, mock_call_llm, controller_instance):
         """run_task() with tool call should execute tool and continue loop."""
         mock_call_llm.side_effect = [
-            "!READ /path/to/file",
+            '{"name": "read_file", "arguments": {"path": "/path/to/file"}}',
             "File content is ready"
         ]
 
-        with patch('controller.execute_tool') as mock_execute:
-            mock_execute.return_value = "[SYSTEM OUTPUT: File content]"
+        # Mock the tool engine
+        controller_instance.tool_engine.dispatch.return_value = "[SYSTEM OUTPUT: File content]"
 
-            result = controller_instance.run_task("Read the file")
+        result = controller_instance.run_task("Read the file")
 
-            assert mock_execute.called
-            assert result == "File content is ready"
+        assert controller_instance.tool_engine.dispatch.called
+        assert result == "File content is ready"
 
     @patch('controller.call_llm')
     def test_run_task_no_tool_exits_loop_immediately(self, mock_call_llm, controller_instance):
