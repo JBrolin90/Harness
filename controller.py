@@ -1,5 +1,5 @@
 from brain import call_llm
-from tools import tool_dispatch
+from tool_dispatch import tool_dispatch
 from terminal_history import terminal_history_upgrade
 from provider import ProviderManager
 from systemprompt import build_system_prompt

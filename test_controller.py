@@ -189,12 +189,12 @@ class TestToolEngineIntegration:
 
     def test_controller_has_tool_engine_function(self, controller):
         """Controller should have tool_engine as function reference."""
-        from tools import tool_dispatch
+        from tool_dispatch import tool_dispatch
         assert hasattr(controller, 'tool_engine')
         assert controller.tool_engine == tool_dispatch
 
     def test_tool_engine_is_callable_function(self, controller):
         """tool_dispatch should be callable and return None for plain text."""
-        from tools import tool_dispatch
+        from tool_dispatch import tool_dispatch
         result = tool_dispatch("Plain text, no tool")
         assert result is None
