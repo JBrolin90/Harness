@@ -3,6 +3,7 @@ from tool_dispatch import tool_dispatch
 from terminal_history import terminal_history_upgrade
 from provider import ProviderManager
 from systemprompt import build_system_prompt
+from tools.core_config import set_current_provider
 
 
 class HarnessController:
@@ -12,6 +13,7 @@ class HarnessController:
         terminal_history_upgrade()
 
         self.current_provider = ProviderManager().get_provider(provider_name)
+        set_current_provider(self.current_provider)
         self.tool_engine = tool_dispatch
         self.system_prompt = ""
         self.conversation_history = []

@@ -19,7 +19,7 @@ class ReadFileTool(BaseTool):
         "required": ["path"]
     }
 
-    def execute(self, path: str) -> str:
+    def execute(self, path: str) -> str:  # type: ignore[override]
         try:
             validated_path = _validate_path(path)
             with open(validated_path, 'r') as f:
@@ -49,7 +49,7 @@ class WriteFileTool(BaseTool):
         "required": ["path", "content"]
     }
 
-    def execute(self, path: str, content: str) -> str:
+    def execute(self, path: str, content: str) -> str:  # type: ignore[override]
         try:
             validated_path = _validate_path(path)
             with open(validated_path, 'w') as f:
@@ -83,7 +83,7 @@ class EditFileTool(BaseTool):
         "required": ["path", "search", "replace"]
     }
 
-    def execute(self, path: str, search: str, replace: str) -> str:
+    def execute(self, path: str, search: str, replace: str) -> str:  # type: ignore[override]
         try:
             validated_path = _validate_path(path)
         except ValueError as e:
@@ -125,7 +125,7 @@ class ListFilesTool(BaseTool):
         "required": ["path"]
     }
 
-    def execute(self, path: str) -> str:
+    def execute(self, path: str) -> str:  # type: ignore[override]
         try:
             validated_path = _validate_path(path)
             if not os.path.exists(validated_path):

@@ -22,7 +22,7 @@ class BashTool(BaseTool):
     def system_prompt_addition(self) -> str:
         return "\n- Use the exact tool name as specified in the schema\n- Wait for the system to confirm tool operations before concluding"
 
-    def execute(self, command: str) -> str:
+    def execute(self, command: str) -> str:  # type: ignore[override]
         clean_arg = command.strip().strip('"').strip("'")
         safe_commands = ["ls", "cd", "find", "cat", "grep", "pwd", "du", "head", "tail", "wc", "stat", "diff"]
         first_word = clean_arg.split(' ')[0]

@@ -7,7 +7,8 @@ All tools are defined in the tools/ package:
 """
 # Import all tools to trigger registration (relative imports needed inside package)
 from .standard_tools import ReadFileTool, WriteFileTool, EditFileTool, ListFilesTool
-from .bash import BashTool
+from .bash_tool import BashTool
+from .modelName_tool import GetModelNameTool
 from .base_tool import BaseTool, ToolsManager, _validate_path, get_tools_instructions
 
 # Backward compatibility exports
@@ -27,4 +28,5 @@ __all__ = [
     "TOOLS",
     "TOOL_HANDLERS",
     "get_tools_instructions",
+    "GetModelNameTool",
 ]
