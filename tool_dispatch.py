@@ -1,6 +1,6 @@
 """Tool dispatch - parses JSON tool calls and executes them."""
 import json
-from tools import TOOL_HANDLERS
+from tools import BaseTool
 
 
 def tool_dispatch(response: str) -> str | None:
@@ -14,12 +14,8 @@ def tool_dispatch(response: str) -> str | None:
         tool_name = call["name"]
         arguments = call.get("arguments") or {}
         
-        if tool_name not in TOOL_HANDLERS:
-            return f"[SYSTEM ERROR: Unknown tool '{tool_name}']"
-        
         print(f"\n[🔧 Harness executing: {tool_name}]")
-        handler = TOOL_HANDLERS[tool_name]
-        return handler(arguments)
+        return BaseTool.dispatch(tool_name, arguments)
         
     except json.JSONDecodeError:
         return None

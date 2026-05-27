@@ -9,11 +9,17 @@ class TestToolDispatch:
     def test_tool_dispatch_parses_valid_json(self):
         """tool_dispatch should parse valid JSON tool call (raw JSON from native function calling)."""
         from tool_dispatch import tool_dispatch
+        from tools import BaseTool, ToolsManager
+        import tools
         # Raw JSON response from structured tool calling API
         response = '{"name": "read_file", "arguments": {"path": "test.txt"}}'
-        with patch('tool_dispatch.TOOL_HANDLERS', {"read_file": lambda args: "[OK]"}):
+        original_registry = dict(ToolsManager._registry)
+        ToolsManager._registry = {"read_file": type("MockTool", (), {"name": "read_file", "execute": lambda self, **kw: "[OK]"})}
+        try:
             result = tool_dispatch(response)
             assert result == "[OK]"
+        finally:
+            ToolsManager._registry = original_registry
 
     def test_tool_dispatch_returns_none_for_non_json(self):
         """tool_dispatch should return None when no JSON found."""
@@ -38,7 +44,12 @@ class TestToolDispatch:
     def test_tool_dispatch_handles_empty_arguments(self):
         """tool_dispatch should handle missing 'arguments' key."""
         from tool_dispatch import tool_dispatch
+        from tools import ToolsManager
         response = '{"name": "bash", "command": "ls"}'
-        with patch('tool_dispatch.TOOL_HANDLERS', {"bash": lambda args: "[OK]"}):
+        original_registry = dict(ToolsManager._registry)
+        ToolsManager._registry = {"bash": type("MockTool", (), {"name": "bash", "execute": lambda self, **kw: "[OK]"})}
+        try:
             result = tool_dispatch(response)
             assert result == "[OK]"
+        finally:
+            ToolsManager._registry = original_registry
