@@ -1,6 +1,6 @@
 """System prompt builder - dynamically generates prompts from registered tools."""
 import os
-from tools import BaseTool
+from tools.base_tool import BaseTool
 from AGENT import AGENT_md_INGESTIOR
 
 

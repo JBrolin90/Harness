@@ -1,6 +1,6 @@
 """Tool dispatch - parses JSON tool calls and executes them."""
 import json
-from tools import BaseTool
+from tools.base_tool import BaseTool
 
 
 def tool_dispatch(response: str) -> str | None:

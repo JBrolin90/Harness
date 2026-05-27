@@ -52,14 +52,14 @@ class TestGetToolsInstructions:
 
     def test_returns_string(self):
         """get_tools_instructions should return a string."""
-        from tools import get_tools_instructions
+        from tools.base_tool import get_tools_instructions
         result = get_tools_instructions()
         assert isinstance(result, str)
         assert len(result) > 0
 
     def test_mentions_json(self):
         """get_tools_instructions should mention JSON."""
-        from tools import get_tools_instructions
+        from tools.base_tool import get_tools_instructions
         result = get_tools_instructions()
         assert "json" in result.lower()
 
@@ -67,39 +67,39 @@ class TestGetToolsInstructions:
 class TestValidatePath:
     """Tests for path validation."""
 
-    @patch('tools.os.getcwd', return_value="/test/cwd")
-    @patch('tools.os.path.abspath')
+    @patch('tools.base_tool.os.getcwd', return_value="/test/cwd")
+    @patch('tools.base_tool.os.path.abspath')
     def test_accepts_simple_relative_path(self, mock_abspath, mock_getcwd):
         """Should accept paths within working directory."""
         mock_abspath.return_value = "/test/cwd/subdir/file.txt"
-        from tools import _validate_path
+        from tools.base_tool import _validate_path
         result = _validate_path("subdir/file.txt")
         assert result == "/test/cwd/subdir/file.txt"
 
-    @patch('tools.os.getcwd', return_value="/test/cwd")
-    @patch('tools.os.path.abspath')
+    @patch('tools.base_tool.os.getcwd', return_value="/test/cwd")
+    @patch('tools.base_tool.os.path.abspath')
     def test_accepts_nested_relative_path(self, mock_abspath, mock_getcwd):
         """Should accept deeply nested paths."""
         mock_abspath.return_value = "/test/cwd/a/b/c/file.txt"
-        from tools import _validate_path
+        from tools.base_tool import _validate_path
         result = _validate_path("a/b/c/file.txt")
         assert result == "/test/cwd/a/b/c/file.txt"
 
-    @patch('tools.os.getcwd', return_value="/test/cwd")
-    @patch('tools.os.path.abspath')
+    @patch('tools.base_tool.os.getcwd', return_value="/test/cwd")
+    @patch('tools.base_tool.os.path.abspath')
     def test_rejects_absolute_path_outside_cwd(self, mock_abspath, mock_getcwd):
         """Should reject absolute paths outside working directory."""
         mock_abspath.return_value = "/etc/passwd"
-        from tools import _validate_path
+        from tools.base_tool import _validate_path
         with pytest.raises(ValueError, match="Access denied"):
             _validate_path("/etc/passwd")
 
-    @patch('tools.os.getcwd', return_value="/test/cwd")
-    @patch('tools.os.path.abspath')
+    @patch('tools.base_tool.os.getcwd', return_value="/test/cwd")
+    @patch('tools.base_tool.os.path.abspath')
     def test_rejects_parent_traversal_outside_cwd(self, mock_abspath, mock_getcwd):
         """Should reject traversal attempts outside working directory."""
         mock_abspath.return_value = "/test/other_dir"
-        from tools import _validate_path
+        from tools.base_tool import _validate_path
         with pytest.raises(ValueError, match="Access denied"):
             _validate_path("../other_dir")
 
