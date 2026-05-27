@@ -27,7 +27,7 @@ class BaseTool(metaclass=ToolsManager):
 
     # Subclasses override with their own signature. Type checker suppressed because
     # we always dispatch via **kwargs unpacking (see dispatch method below)
-    def execute(self, **kwargs: Any) -> str:  # type: ignore[override]  # type: ignore[override]
+    def execute(self, **kwargs: Any) -> str:  # type: ignore[override]
         """Execute the tool with given kwargs."""
         raise NotImplementedError
 

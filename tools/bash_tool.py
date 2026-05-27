@@ -1,5 +1,6 @@
 """Bash execution tool."""
 import subprocess
+import sys
 from .base_tool import BaseTool
 
 
@@ -24,7 +25,7 @@ class BashTool(BaseTool):
 
     def execute(self, command: str) -> str:  # type: ignore[override]
         clean_arg = command.strip().strip('"').strip("'")
-        safe_commands = ["ls", "cd", "find", "cat", "grep", "pwd", "du", "head", "tail", "wc", "stat", "diff"]
+        safe_commands = ["ls", "cd", "find", "cat", "grep", "pwd", "du", "head", "tail", "wc", "stat", "diff", "rm", "rmdir"]
         first_word = clean_arg.split(' ')[0]
 
         if first_word in safe_commands:
@@ -39,6 +40,11 @@ class BashTool(BaseTool):
         else:
             print("\n⚠️  Bob REQUESTS SHELL EXECUTION ⚠️")
             print(f"Command:  {clean_arg}")
+            # Check if stdin is interactive (TTY) before prompting
+            if not sys.stdin.isatty():
+                print("[❌ Execution denied - non-interactive mode.]")
+                return "[SYSTEM ERROR: User denied permission.]"
+            
             confirm = input("Allow this command? [y/N]: ")
 
             if confirm.lower() == 'y':

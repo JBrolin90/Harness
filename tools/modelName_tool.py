@@ -1,6 +1,6 @@
 """Tool that returns the name of the current LLM model."""
 from .base_tool import BaseTool
-from .core_config import current_provider_config
+from .core_config import get_current_model_name
 
 
 class GetModelNameTool(BaseTool):
@@ -15,7 +15,7 @@ class GetModelNameTool(BaseTool):
     }
 
     def execute(self) -> str:  # type: ignore[override]
-        if current_provider_config is None:
+        model_name = get_current_model_name()
+        if model_name is None:
             return "[SYSTEM OUTPUT: No model configured]"
-        model_name = current_provider_config.model
         return f"[SYSTEM OUTPUT: Current model is '{model_name}']"

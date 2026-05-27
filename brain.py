@@ -25,6 +25,10 @@ def call_llm(history, system_prompt, config: ProviderConfig):
         "stream": config.attributes.get("stream", False)
     }
     
+    # Add response_format if specified in attributes
+    if "response_format" in config.attributes:
+        payload["response_format"] = config.attributes["response_format"]
+    
     # Add tools if provider supports native function calling
     if config.tools:
         payload["tools"] = config.tools
