@@ -4,6 +4,7 @@ from terminal_history import terminal_history_upgrade
 from provider import ProviderManager
 from systemprompt import build_system_prompt
 from tools.core_config import set_current_provider
+from tools.base_tool import BaseTool
 
 
 class HarnessController:
@@ -17,6 +18,22 @@ class HarnessController:
         self.tool_engine = tool_dispatch
         self.system_prompt = ""
         self.conversation_history = []
+        self._setup_tools()
+
+    def _setup_tools(self):
+        """Build tools list from registered BaseTool classes and attach to provider."""
+        tools = []
+        for tool_cls in BaseTool._registry.values():
+            tool = tool_cls()
+            tools.append({
+                "type": "function",
+                "function": {
+                    "name": tool.name,
+                    "description": tool.description,
+                    "parameters": tool.parameters
+                }
+            })
+        self.current_provider.tools = tools
 
     def run_task(self, prompt: str) -> str:
         """Execute a task with the given prompt. Returns the final response."""

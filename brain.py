@@ -59,7 +59,22 @@ def call_llm(history, system_prompt, config: ProviderConfig):
             return content
         else:
             # Ollama style
-            return data['message']['content']
+            message = data['message']
+            content = message.get('content', '')
+            
+            # Check if model made a tool call (Ollama also returns tool_calls)
+            if 'tool_calls' in message and message['tool_calls']:
+                tool_call = message['tool_calls'][0]
+                tool_name = tool_call['function']['name']
+                arguments = tool_call['function']['arguments']
+                
+                # Parse arguments if they're a JSON string
+                if isinstance(arguments, str):
+                    arguments = json.loads(arguments)
+                
+                return json.dumps({"name": tool_name, "arguments": arguments})
+            
+            return content
         
     except Exception as e:
         print(f"Error processing request to {config.url}: {e}")

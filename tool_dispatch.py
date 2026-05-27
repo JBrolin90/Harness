@@ -152,9 +152,34 @@ def _parse_bash_command(text: str) -> dict | None:
     return None
 
 
+def _parse_json_in_code_block(text: str) -> dict | None:
+    """Parse JSON tool call inside markdown code blocks like ```json ... ```."""
+    pattern = r'```json\s*\n?(.*?)\n?```'
+    match = re.search(pattern, text.strip(), re.DOTALL)
+    if match:
+        try:
+            data = json.loads(match.group(1).strip())
+            if isinstance(data, dict) and 'name' in data:
+                return {'name': data['name'], 'arguments': data.get('arguments', {})}
+        except json.JSONDecodeError:
+            pass
+    return None
+
+
 def tool_dispatch(response: str) -> str | None:
     """Parse response for tool call (JSON or XML format) and execute it."""
-    # Try bash command in markdown code blocks first
+    # Try JSON in code blocks FIRST (qwen outputs ```json { ... } ```)
+    try:
+        json_call = _parse_json_in_code_block(response)
+        if json_call:
+            print(f"\n[🔧 Harness executing: {json_call['name']}]")
+            return _dispatch_tool(json_call["name"], json_call["arguments"])
+    except (KeyError, TypeError) as e:
+        return f"[SYSTEM ERROR: {str(e)}]"
+    except Exception as e:
+        return f"[SYSTEM ERROR: {str(e)}]"
+
+    # Try bash command in markdown code blocks
     try:
         bash_call = _parse_bash_command(response)
         if bash_call:

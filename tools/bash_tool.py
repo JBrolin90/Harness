@@ -25,7 +25,7 @@ class BashTool(BaseTool):
 
     def execute(self, command: str) -> str:  # type: ignore[override]
         clean_arg = command.strip().strip('"').strip("'")
-        safe_commands = ["ls", "cd", "find", "cat", "grep", "pwd", "du", "head", "tail", "wc", "stat", "diff", "rm", "rmdir"]
+        safe_commands = ["ls", "cd", "find", "cat", "grep", "pwd", "du", "head", "tail", "wc", "stat", "diff"]
         first_word = clean_arg.split(' ')[0]
 
         if first_word in safe_commands:
