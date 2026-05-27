@@ -8,17 +8,11 @@ def main():
         default="cloud-pro",
         help="LLM provider name (default: cloud-pro)"
     )
-    parser.add_argument(
-        "--persona",
-        default="default",
-        help="Persona name (default: default)"
-    )
     args = parser.parse_args()
 
-    ctrl = controller.HarnessController(args.provider, args.persona)
+    ctrl = controller.HarnessController(args.provider)
 
     print(f"Bob-Harness v1.5 initialized. \nBrain: \n  {ctrl.current_provider.name} \n  ({ctrl.current_provider.model})")
-    print(f"Persona: {ctrl.persona_name}")
     print("Type 'exit' to quit.")
 
     while True:

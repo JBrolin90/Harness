@@ -115,8 +115,7 @@ class TestHarnessControllerRunTask:
             mock_pm_instance.get_provider.return_value = mock_provider
 
             from controller import HarnessController
-            # Disable context tracking for basic tool execution tests
-            ctrl = HarnessController(enable_context=False)
+            ctrl = HarnessController()
             ctrl.current_provider = MagicMock()
             ctrl.system_prompt = "Test prompt"
             ctrl.conversation_history = []
@@ -342,7 +341,7 @@ class TestExecuteNextTool:
             mock_pm_instance.get_provider.return_value = mock_provider
 
             from controller import HarnessController
-            ctrl = HarnessController(enable_context=False)
+            ctrl = HarnessController()
             return ctrl
 
     def test_execute_next_tool_returns_none_when_no_match(self, controller):
