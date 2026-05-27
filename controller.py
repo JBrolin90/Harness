@@ -20,10 +20,6 @@ class HarnessController:
         """Execute a task with the given prompt. Returns the final response."""
         self.system_prompt = build_system_prompt()
 
-        # print("/n================================ System prompt ==========================================/n")
-        # print(self.system_prompt)
-        # print("/n================================ System prompt ==========================================/n")
-
         self.conversation_history.append({"role": "user", "content": prompt})
 
         print(f"\n{self._get_history_stats()}")
