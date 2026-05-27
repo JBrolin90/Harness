@@ -1,7 +1,6 @@
 import subprocess
 import os
 import json
-import re
 
 
 TOOLS = [
@@ -229,33 +228,13 @@ class ToolEngine:
     def dispatch(self, response: str) -> str | None:
         """Parse response for JSON tool call and execute it."""
         try:
-            # Find JSON in response
-            json_match = None
-            for start in ['```json', '```JSON', 'Json', '`']:
-                if start in response:
-                    parts = response.split(start)
-                    if len(parts) > 1:
-                        json_match = parts[1].split('```')[0].strip()
-                        break
-            
-            if not json_match:
-                json_match = response.strip()
-
-            call = json.loads(json_match)
-            
-            # Handle array of tool calls (model wraps in [...]) - extract first
-            if isinstance(call, list):
-                if len(call) == 0:
-                    return None
-                call = call[0]
+            # Parse the response as JSON
+            call = json.loads(response.strip())
             
             if "name" not in call:
                 return None
             tool_name = call["name"]
-            # Support both "arguments" and "parameters" key names
-            arguments = call.get("arguments") or call.get("parameters")
-            if arguments is None:
-                return None
+            arguments = call.get("arguments") or {}
             
             if tool_name not in TOOL_HANDLERS:
                 return f"[SYSTEM ERROR: Unknown tool '{tool_name}']"
@@ -265,48 +244,8 @@ class ToolEngine:
             return handler(arguments)
             
         except json.JSONDecodeError:
-            # Try custom format: {tool => "name", args => { --param "value" }}
-            return self._parse_custom_format(response)
+            return None
         except KeyError as e:
             return f"[SYSTEM ERROR: Missing parameter {e}]"
-        except Exception as e:
-            return f"[SYSTEM ERROR: {str(e)}]"
-    
-    def _parse_custom_format(self, response: str) -> str | None:
-        """Parse custom tool call format like {tool => "name", args => { --param "value" }}"""
-        try:
-            # Check for custom [TOOL_CALL] wrapper
-            tool_call_match = re.search(r'\[TOOL_CALL\](.*?)\[/TOOL_CALL\]', response, re.DOTALL)
-            if tool_call_match:
-                content = tool_call_match.group(1).strip()
-            else:
-                content = response.strip()
-            
-            # Extract tool name: tool => "name" or tool: "name"
-            name_match = re.search(r'tool\s*=>?\s*["\']([^"\']+)["\']', content)
-            if not name_match:
-                return None
-            tool_name = name_match.group(1)
-            
-            if tool_name not in TOOL_HANDLERS:
-                return f"[SYSTEM ERROR: Unknown tool '{tool_name}']"
-            
-            # Extract arguments: --param "value" format inside braces
-            args = {}
-            args_match = re.search(r'args\s*=>?\s*\{(.*?)\}', content, re.DOTALL)
-            if args_match:
-                args_block = args_match.group(1)
-                # Match --key "value" or key: "value" patterns
-                param_matches = re.findall(r'--?(\w+)\s*["\']([^"\']*)["\']', args_block)
-                for key, value in param_matches:
-                    args[key] = value
-            
-            if not args:
-                return f"[SYSTEM ERROR: No arguments found for tool '{tool_name}']"
-            
-            print(f"\n[🔧 Harness executing (custom format): {tool_name}]")
-            handler = TOOL_HANDLERS[tool_name]
-            return handler(args)
-            
         except Exception as e:
             return f"[SYSTEM ERROR: {str(e)}]"
