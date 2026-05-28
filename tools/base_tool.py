@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import os
-from abc import ABCMeta, abstractmethod
+from abc import ABCMeta
 from typing import ClassVar, Any
 
 
@@ -13,8 +13,9 @@ class ToolsManager(ABCMeta):
     def __new__(mcs, name: str, bases: tuple, namespace: dict) -> ToolsManager:
         cls = super().__new__(mcs, name, bases, namespace)
         # Register concrete subclasses (those with 'name' attribute)
-        if hasattr(cls, 'name') and cls.name:
-            mcs._registry[cls.name] = cls
+        cls_name: str | None = getattr(cls, 'name', None)  # type: ignore[assignment]
+        if cls_name:
+            mcs._registry[cls_name] = cls
         return cls
 
 
@@ -46,7 +47,7 @@ class BaseTool(metaclass=ToolsManager):
     @classmethod
     def get_all_instructions(cls) -> list[dict]:
         """Get instructions for all registered tools."""
-        return [t().get_instruction(t.name, t.description, t.parameters) for t in cls._registry.values()]
+        return [t().get_instruction(t.name, t.description, t.parameters) for t in cls._registry.values()]  # type: ignore[misc]
 
     @classmethod
     def dispatch(cls, tool_name: str, arguments: dict) -> str:
@@ -60,9 +61,9 @@ class BaseTool(metaclass=ToolsManager):
 def _validate_path(file_path: str) -> str:
     """Validate path is within working directory."""
     current_working_directory = os.getcwd()
-    abs_path = os.path.abspath(os.path.join(current_working_directory, file_path))
+    abs_path = os.path.realpath(os.path.join(current_working_directory, file_path))
 
-    if not abs_path.startswith(current_working_directory):
+    if os.path.commonpath([current_working_directory, abs_path]) != current_working_directory:
         raise ValueError(f"Access denied: Path '{file_path}' is outside the allowed working directory.")
 
     return abs_path

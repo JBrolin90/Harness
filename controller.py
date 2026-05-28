@@ -35,7 +35,7 @@ class HarnessController:
             })
         self.current_provider.tools = tools
 
-    def run_task(self, prompt: str) -> str:
+    def run_task(self, prompt: str, max_iterations: int = 10) -> str:
         """Execute a task with the given prompt. Returns the final response."""
         self.system_prompt = build_system_prompt()
 
@@ -51,7 +51,7 @@ class HarnessController:
 
         # The Autonomous Tool Loop (ReAct)
         iteration = 0
-        while True:
+        while iteration < max_iterations:
             system_result = self.tool_engine(response)
 
             if system_result:
@@ -68,11 +68,14 @@ class HarnessController:
                 print(f"Bob: {response}")
                 print(f"[Model: {self.current_provider.model}] {self._get_history_stats()} (iteration {iteration})")
                 self.conversation_history.append({"role": "assistant", "content": response})
-                print(f"/n================================ End of iteration {iteration} ==========================================/n")
+                print(f"\n================================ End of iteration {iteration} ==========================================\n")
             else:
-                print(f"/n========================== End of task after {iteration} iterations ====================================/n")
+                print(f"\n========================== End of task after {iteration} iterations ====================================\n")
                 break
-
+        else:
+            print("\n[WARNING: Task reached maximum iterations (" + str(max_iterations) + "). Stopping safety check.]")
+            print("\n========================== Max Iterations Reached ====================================\n")
+            
         return response
 
     def _get_history_stats(self) -> str:

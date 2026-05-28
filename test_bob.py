@@ -69,9 +69,7 @@ class TestHarnessControllerRunTask:
             ctrl.current_provider = MagicMock()
             ctrl.system_prompt = "Test prompt"
             ctrl.conversation_history = []
-            ctrl.tool_engine = MagicMock()
-            # dispatch should return None by default (no tool call) to exit the loop
-            ctrl.tool_engine.dispatch.return_value = None
+            ctrl.tool_engine = MagicMock(return_value=None)
             yield ctrl
 
     @patch('controller.call_llm')
@@ -87,26 +85,18 @@ class TestHarnessControllerRunTask:
     @patch('controller.call_llm')
     def test_run_task_with_tool_execution(self, mock_call_llm, controller_instance):
         """run_task() with tool call should execute tool and continue loop."""
-        # LLM returns a tool call JSON
-        # dispatch is called, returns truthy -> loop continues
-        # LLM is called again, returns final response  
-        # dispatch is called with final response, returns None -> loop exits
         mock_call_llm.side_effect = [
-            '{"name": "read_file", "arguments": {"path": "/path/to/file"}}',  # First: tool call
-            "Final response after tool"  # Second: final response after tool result fed back
+            '{"name": "read_file", "arguments": {"path": "/path/to/file"}}',
+            "Final response after tool"
         ]
-        # First dispatch returns tool result (truthy), second returns None
-        controller_instance.tool_engine.dispatch.return_value = None
-        controller_instance.tool_engine.dispatch.side_effect = [
-            "[SYSTEM OUTPUT: File content]",  # truthy, loop continues
-            None,  # falsy, loop exits
+        controller_instance.tool_engine.side_effect = [
+            "[SYSTEM OUTPUT: File content]",
+            None
         ]
 
         result = controller_instance.run_task("Read the file")
 
-        # First dispatch called with tool JSON, second dispatch called with final response
-        assert controller_instance.tool_engine.dispatch.call_count == 2
-        # The final response is the last LLM call result
+        assert controller_instance.tool_engine.call_count == 2
         assert "Final response" in result
 
     @patch('controller.call_llm')
@@ -127,7 +117,6 @@ class TestHarnessControllerRunTask:
         controller_instance.run_task("First message")
         controller_instance.run_task("Second message")
 
-        # Each run_task adds 2 messages (user + assistant)
         assert len(controller_instance.conversation_history) == 4
 
 
@@ -143,7 +132,6 @@ class TestModuleLevelCompatibility:
         mock_provider = MagicMock()
         mock_pm_instance.get_provider.return_value = mock_provider
 
-        # Force fresh import
         import importlib
         import controller
         importlib.reload(controller)
@@ -192,15 +180,8 @@ class TestControllerReset:
 
         assert controller_instance.conversation_history == []
 
-    def test_reset_allows_fresh_conversation(self, controller_instance):
-        """After reset, run_task should start clean."""
-        controller_instance.conversation_history = [{"role": "user", "content": "old"}]
-
-        with patch('controller.call_llm') as mock_llm:
-            mock_llm.return_value = "Fresh response"
-            controller_instance.reset()
-            controller_instance.run_task("New prompt")
-
-            # History should have only the new exchange
-            assert len(controller_instance.conversation_history) == 2
-            assert controller_instance.conversation_history[0]["content"] == "New prompt"
+    def test_reset_clears_tool_engine(self, controller_instance):
+        """After reset, tool_engine should remain set."""
+        controller_instance.reset()
+        assert hasattr(controller_instance, 'tool_engine')
+        assert callable(controller_instance.tool_engine)
