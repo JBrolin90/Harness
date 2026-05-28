@@ -1,278 +1,237 @@
-# Harness - AI Agent Framework
+# Harness
 
-Harness is a modular AI agent framework that provides a ReAct (Reasoning + Acting) loop for interfacing with Large Language Models (LLMs). It supports multiple LLM providers, tool-based interactions, and conversation management.
+A lightweight, modular ReAct-style autonomous agent framework. It supports multiple LLM providers (OpenAI, Ollama, MiniMax, OpenRouter) and features a multi-stage tool dispatch pipeline that handles JSON, XML, and code block formats.
 
-## Overview
+## Contents
 
-Harness enables AI agents to:
-- **Connect to multiple LLM providers** (MiniMax, OpenRouter, Ollama)
-- **Execute tools** (file operations, bash commands) in a secure sandbox
-- **Maintain conversation context** across multiple turns
-- **Parse tool calls** from various LLM response formats (JSON, XML, code blocks)
+- [Features](#features)
+- [Architecture](#architecture)
+- [Setup](#setup)
+- [Usage](#usage)
+- [Tools](#tools)
+- [Adding New Tools](#adding-new-tools)
+- [Testing](#testing)
+- [Project Structure](#project-structure)
+
+---
+
+## Features
+
+- **Multi-Provider Support** — Seamlessly switch between local models (Ollama) and cloud APIs (MiniMax, OpenRouter). Provider configs are stored in `providers.json`.
+- **Auto-Registering Tools** — Subclass `BaseTool` and the tool is automatically discovered and passed to the LLM.
+- **Multi-Format Tool Parsing** — `tool_dispatch.py` handles 7 formats: JSON code blocks, bare JSON, simple `{"tool"/"args"}` JSON, bash/sh code blocks, colon-XML, `<tool_call>...</tool_call>` XML, and plain XML.
+- **Explicit Result Types** — `ToolResult` (truthy, continues loop) and `SystemError` (falsy, stops loop) make the ReAct loop behavior unambiguous.
+- **Path Sandboxing** — File operations are validated to stay within the working directory.
+- **Context Awareness** — Automatically ingests `AGENT.py` from the current directory for project-specific instructions.
+- **Modular Design** — `brain.py` handles LLM communication, `tool_dispatch.py` parses and executes tools, `controller.py` orchestrates the loop with full conversation history.
+
+---
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                          User                               │
-└─────────────────────┬───────────────────────────────────────┘
-                      │
-                      ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    bob.py (CLI)                             │
-│                Entry point for user interaction             │
-└─────────────────────┬───────────────────────────────────────┘
-                      │
-                      ▼
-┌─────────────────────────────────────────────────────────────┐
-│              HarnessController (controller.py)              │
-│  - Manages conversation history                             │
-│  - Orchestrates the ReAct loop                              │
-│  - Routes LLM calls and tool executions                     │
-└─────────────────────┬───────────────────────────────────────┘
-                      │
-          ┌───────────┴───────────┐
-          ▼                       ▼
-┌─────────────────┐     ┌─────────────────────────────────┐
-│  brain.py       │     │        tool_dispatch.py         │
-│  - LLM API call │     │   - Parses tool calls from      │
-│  - Handles both │     │     LLM responses (JSON/XML/    │
-│    OpenAI-style │     │     code blocks)                │
-│    and Ollama   │     │   - Dispatches to tool handlers │
-│    formats      │     └────────────────┬────────────────┘
-└─────────────────┘                      │
-                                         ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    tools/                                   │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐          │
-│  │ base_tool.py│  │standard_tools│ │ bash_tool.py│          │
-│  │ - ABC       │  │ - read_file │  │ - bash      │          │
-│  │ - Registry  │  │ - write_file│  │             │          │
-│  │ - Dispatch  │  │ - edit_file │  └─────────────┘          │
-│  └─────────────┘  │ - list_files│                           │
-│                   └─────────────┘                           │
-└─────────────────────────────────────────────────────────────┘
-                      │
-                      ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    provider.py                              │
-│  - ProviderConfig (dataclass)                               │
-│  - ProviderManager (loads/stores provider configs)          │
-│  - providers.json (user-added providers)                    │
-└─────────────────────────────────────────────────────────────┘
+User
+ └─ bob.py (CLI entry point)
+     └─ HarnessController (controller.py)
+         ├─ brain.py                      → LLM API call + provider dispatch
+         │   ├─ _handle_openai_style_response  (MiniMax / OpenAI / OpenRouter)
+         │   └─ _handle_ollama_response        (Ollama)
+         │
+         └─ tool_dispatch.py               → 7-parser pipeline → _safe_dispatch
+             └─ tools/
+                 ├─ base_tool.py           → BaseTool ABC + ToolsManager metaclass
+                 ├─ standard_tools.py      → read_file, write_file, edit_file, list_files
+                 ├─ bash_tool.py           → bash (whitelist + interactive approval)
+                 └─ modelName_tool.py      → get_model_name
 ```
 
-## Core Components
+---
 
-### `controller.py` - HarnessController
-The main orchestrator class managing the agent loop:
+## Setup
 
-```python
-from controller import HarnessController
-
-ctrl = HarnessController(provider_name="cloud-pro")
-response = ctrl.run_task("Your prompt here")
-```
-
-**Key methods:**
-- `run_task(prompt)` - Execute a task with the given prompt, returns final response
-- `reset()` - Clear conversation history to start fresh
-
-### `brain.py` - LLM Interface
-Handles unified communication with LLM providers:
-
-```python
-from brain import call_llm
-
-response = call_llm(history, system_prompt, config)
-```
-
-Supports both OpenAI-style APIs (MiniMax, OpenRouter) and Ollama local models.
-
-### `tool_dispatch.py` - Tool Call Parser
-Parses tool calls from LLM responses in multiple formats:
-
-1. **JSON in code blocks** - ` ```json {"name": "...", "arguments": {...}} ``` `
-2. **Raw JSON** - `{"name": "...", "arguments": {...}}`
-3. **XML format** - `<tool_call>read_file<arg_key>path</arg_key><arg_value>file.txt</arg_value></tool_call>`
-4. **Colon format** - `<tool_name>name:{args}/>`
-5. **Simple XML** - `<read_file>path</read_file>`
-6. **Bash in code blocks** - ` ```bash ls -la ``` `
-
-### `provider.py` - Provider Management
-Manages LLM provider configurations:
-
-```python
-from provider import ProviderManager
-
-pm = ProviderManager()
-providers = pm.list_providers()  # ['cloud-pro', 'local-coder', ...]
-config = pm.get_provider("cloud-pro")
-```
-
-**Default Providers:**
-- `cloud-pro` - MiniMax API (`MINIMAX_API_KEY`)
-- `local-coder` - Ollama at localhost (`OLLAMA_DUMMY_KEY`)
-
-**User Providers** (in `providers.json`):
-- Various OpenRouter models (Poolside, DeepSeek, Gemma, Qwen)
-- Local Ollama models (Qwen2.5-coder variants, Llama3.2, DeepSeek-Coder, Gemma4)
-
-## Tools System
-
-### `tools/base_tool.py` - Base Tool Architecture
-Uses `ToolsManager` metaclass for auto-registration:
-
-```python
-from tools.base_tool import BaseTool
-
-class MyTool(BaseTool):
-    name = "my_tool"
-    description = "Description of what it does"
-    parameters = {
-        "type": "object",
-        "properties": {"arg1": {"type": "string"}},
-        "required": ["arg1"]
-    }
-    
-    def execute(self, arg1: str) -> str:
-        return f"Executed with {arg1}"
-```
-
-### Available Tools
-
-| Tool | Description |
-|------|-------------|
-| `read_file` | Read file contents (sandboxed to working directory) |
-| `write_file` | Create or overwrite files |
-| `edit_file` | Replace exact text in files |
-| `list_files` | List directory contents |
-| `bash` | Execute bash commands (whitelist or user-approved) |
-| `get_model_name` | Get current LLM model name |
-
-### Security Features
-
-- **Path validation** - All file operations validated to stay within working directory
-- **Bash whitelist** - Safe commands (`ls`, `cat`, `grep`, etc.) execute without prompt
-- **Interactive approval** - Non-whitelisted commands require user confirmation via TTY
-
-## Usage
-
-### CLI Entry Point
+**1. Install dependencies:**
 
 ```bash
-# Use default provider (cloud-pro)
-python bob.py
-
-# Use specific provider
-python bob.py --provider local-coder
+pip install -r requirements.txt
 ```
 
-### Programmatic Usage
+Requirements: `requests`, `pytest`.
 
-```python
-from controller import init, run_task
+**2. Configure providers:**
 
-# Initialize
-init(provider_name="cloud-pro")
-
-# Run tasks
-response = run_task("Hello, what can you do?")
-response = run_task("Read the contents of setup.py")
-```
-
-### Module-Level Functions
-
-```python
-from controller import HarnessController
-
-# Direct instantiation for more control
-ctrl = HarnessController(provider_name="ollama")
-ctrl.run_task("List files in current directory")
-ctrl.reset()  # Clear history
-```
-
-## Configuration
-
-### Environment Variables
-
-Set API keys before running:
+Edit `providers.json` to add API keys, model preferences, and URLs. Each provider maps an environment variable to an API key.
 
 ```bash
 export MINIMAX_API_KEY="your-key-here"
 export OPENROUTER_API_KEY="your-key-here"
 ```
 
-### Adding Providers
+**Default providers:**
+- `cloud-pro` — MiniMax API
+- `local-coder` — Ollama at localhost
 
-Edit `providers.json` or use `ProviderManager.add_provider()`:
+**User providers** (pre-configured in `providers.json`):
+- Various OpenRouter models (Poolside, DeepSeek, Gemma, Qwen)
+- Local Ollama models (Qwen2.5-coder variants, Llama3.2, DeepSeek-Coder, Gemma4)
+
+**3. Run:**
+
+```bash
+python bob.py --provider cloud-pro
+```
+
+---
+
+## Usage
+
+### CLI
+
+```bash
+python bob.py                    # defaults to cloud-pro
+python bob.py --provider local-coder
+```
+
+### Programmatic
 
 ```python
-from provider import ProviderConfig, ProviderManager
+from controller import init, run_task
 
-config = ProviderConfig(
-    name="my-provider",
-    provider_type="openai",
-    url="https://api.example.com/v1/chat/completions",
-    model="my-model",
-    api_key_env_var="MY_API_KEY",
-    attributes={"stream": False}
-)
-
-pm = ProviderManager()
-pm.add_provider(config)
+init(provider_name="cloud-pro")
+response = run_task("Read the contents of setup.py")
 ```
+
+### Direct Controller
+
+```python
+from controller import HarnessController
+
+ctrl = HarnessController(provider_name="ollama")
+ctrl.run_task("List files in the current directory")
+ctrl.reset()  # clear conversation history
+```
+
+---
+
+## Tools
+
+Tools are auto-registered via the `ToolsManager` metaclass — just import the module and the registry updates automatically.
+
+| Tool | Description |
+|------|-------------|
+| `read_file` | Read file contents (sandboxed to working directory) |
+| `write_file` | Create or overwrite files |
+| `edit_file` | Replace exact text in files (`search`/`replace`) |
+| `list_files` | List directory contents |
+| `bash` | Execute bash commands (whitelist or interactive approval) |
+| `get_model_name` | Returns the current LLM model name |
+
+**Security:**
+- **Path sandboxing** — All file operations validated to stay within `os.getcwd()`.
+- **Bash whitelist** — Safe commands (`ls`, `cat`, `grep`, `find`, `pwd`, `head`, `tail`, `wc`, `sort`, `uniq`, `mkdir`, `cp` with no `-t`/`--target-directory`, `mv` with no `-t`/`--target-directory`, `rm` only with `-r` or `-f`) execute without confirmation. Non-whitelisted commands require TTY approval.
+
+---
+
+## Adding New Tools
+
+Create a class in `tools/` inheriting from `BaseTool`. It will be auto-registered and made available to the LLM.
+
+```python
+from tools.base_tool import BaseTool
+
+class MyTool(BaseTool):
+    name = "my_tool"
+    description = "Does something useful"
+    parameters = {
+        "type": "object",
+        "properties": {"arg1": {"type": "string"}},
+        "required": ["arg1"]
+    }
+
+    def execute(self, arg1: str) -> str:
+        return f"Processed: {arg1}"
+```
+
+---
 
 ## Testing
 
-Run tests with pytest:
-
 ```bash
-pytest -v
+python3 -m pytest -v
 ```
 
-**Test files:**
-- `test_bob.py` - CLI entry point tests
-- `test_controller.py` - Controller logic tests
-- `test_tools.py` - Tool definitions and path validation
-- `test_tool_dispatch.py` - Tool call parsing tests
+Test files:
+- `test_bob.py` — CLI entry point
+- `test_controller.py` — Controller logic and module-level functions
+- `test_brain.py` — LLM response parsing and API call handling
+- `test_tool_dispatch.py` — All 7 parser functions, parameter normalization, result types
+- `test_tools.py` — Tool definitions and path validation
 
-## Dependencies
-
-```
-requests>=2.28.0
-pytest>=7.0.0
-```
-
-Install with:
-```bash
-pip install -r requirements.txt
-```
+---
 
 ## Project Structure
 
 ```
 Harness/
-├── AGENT.py              # Directory-specific instructions ingestion
-├── bob.py                # CLI entry point
-├── brain.py              # LLM API handler
-├── controller.py         # Main agent controller (HarnessController)
-├── provider.py           # Provider configuration management
-├── providers.json        # User-defined provider configs
-├── systemprompt.py       # Dynamic system prompt builder
-├── terminal_history.py   # Readline history upgrade
-├── tool_dispatch.py      # Tool call parser and dispatcher
-├── requirements.txt     # Dependencies
-├── test_*.py            # Unit tests
-└── tools/
-    ├── __init__.py
-    ├── base_tool.py      # BaseTool ABC and ToolsManager metaclass
-    ├── bash_tool.py      # Bash execution tool
-    ├── core_config.py    # Provider config access for tools
-    ├── modelName_tool.py # Model name introspection tool
-    └── standard_tools.py # File manipulation tools
+├── AGENT.py                  # Directory-specific instructions (auto-ingested)
+├── bob.py                    # CLI entry point
+├── brain.py                  # LLM API handler (unified call_llm)
+├── controller.py             # HarnessController (ReAct loop orchestrator)
+├── provider.py               # ProviderConfig + ProviderManager
+├── providers.json            # User-defined provider configs
+├── systemprompt.py           # Dynamic system prompt builder
+├── terminal_history.py       # Readline history upgrade
+├── tool_dispatch.py          # Tool call parser + dispatcher + result types
+│
+├── test_bob.py
+├── test_brain.py
+├── test_controller.py
+├── test_tool_dispatch.py
+├── test_tools.py
+│
+├── tools/
+│   ├── __init__.py           # Auto-imports all tools to trigger registration
+│   ├── base_tool.py          # BaseTool ABC + ToolsManager metaclass + dispatch
+│   ├── standard_tools.py     # ReadFileTool, WriteFileTool, EditFileTool, ListFilesTool
+│   ├── bash_tool.py          # BashTool (whitelist + interactive approval)
+│   ├── modelName_tool.py     # GetModelNameTool
+│   └── core_config.py        # set_current_provider helper for tools
+│
+├── requirements.txt
+└── README.md
 ```
 
-## License
+---
 
-See project repository for license information.
+## Module Reference
+
+**`controller.py`** — `HarnessController`
+```python
+ctrl = HarnessController(provider_name="cloud-pro")
+ctrl.run_task(prompt, max_iterations=10)  # returns final LLM response
+ctrl.reset()                              # clear conversation history
+```
+
+**`brain.py`** — `call_llm`
+```python
+response = call_llm(history, system_prompt, config)  # config: ProviderConfig
+```
+
+Handles both OpenAI-style APIs and Ollama. Malformed API responses return explicit `[BRAIN ERROR: ...]` strings rather than silently falling back to empty strings.
+
+**`tool_dispatch.py`** — `tool_dispatch`
+```python
+result = tool_dispatch(response_text)
+# Returns: ToolResult(tool_name, output)  → truthy, loop continues
+#          SystemError(message)            → falsy, loop stops
+#          None                            → no tool call found, loop stops
+```
+
+`ToolResult` and `SystemError` implement `__bool__` for clean truthy/falsy checks in the controller loop, and `__str__` for string output.
+
+**`provider.py`** — `ProviderManager`
+```python
+pm = ProviderManager()
+pm.list_providers()           # ['cloud-pro', 'local-coder', ...]
+pm.get_provider("cloud-pro")  # ProviderConfig instance
+pm.add_provider(config)       # add custom provider at runtime
+```

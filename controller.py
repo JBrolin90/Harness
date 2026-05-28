@@ -41,8 +41,9 @@ class HarnessController:
 
         self.conversation_history.append({"role": "user", "content": prompt})
 
-        print(f"\n{self._get_history_stats()}")
+        print(f"\n[Task Started] {self._get_history_stats()}")
 
+        print(f"[Thinking with {self.current_provider.name} / {self.current_provider.model}...]")
         response = call_llm(
             self.conversation_history, self.system_prompt, self.current_provider
         )
@@ -63,12 +64,13 @@ class HarnessController:
 
             iteration += 1
             result_str = str(system_result)
-            print(f"\n[Harness feeding system result back to Bob... {self._get_history_stats()}]")
+            print(f"\n[Harness feeding result back to Bob... {self._get_history_stats()}]")
             print(f"Harness: {result_str}\n")
             self.conversation_history.append(
                 {"role": "user", "content": result_str}
             )
 
+            print(f"[Thinking with {self.current_provider.name} / {self.current_provider.model}...]")
             response = call_llm(
                 self.conversation_history, self.system_prompt, self.current_provider
             )

@@ -53,10 +53,11 @@ def call_llm(history: list, system_prompt: str, config: ProviderConfig) -> str:
     if not resolved_api_key and config.provider_type != "ollama":
         print(f"[WARNING: API key for {config.name} not found in environment variable '{config.api_key_env_var}']")
 
-    headers = {
-        "Authorization": f"Bearer {resolved_api_key}",
-        "Content-Type": "application/json"
-    }
+    headers = {"Content-Type": "application/json"}
+    
+    # Only attach Authorization header if a key was resolved
+    if resolved_api_key:
+        headers["Authorization"] = f"Bearer {resolved_api_key}"
 
     messages = [{"role": "system", "content": system_prompt}]
     messages += history
