@@ -54,28 +54,32 @@ class HarnessController:
         while iteration < max_iterations:
             system_result = self.tool_engine(response)
 
-            if system_result:
-                iteration += 1
-                print(f"\n[Harness feeding system result back to Bob... {self._get_history_stats()}]")
-                print(f"Harness: {system_result}\n")
-                self.conversation_history.append(
-                    {"role": "user", "content": system_result}
-                )
-
-                response = call_llm(
-                    self.conversation_history, self.system_prompt, self.current_provider
-                )
-                print(f"Bob: {response}")
-                print(f"[Model: {self.current_provider.model}] {self._get_history_stats()} (iteration {iteration})")
-                self.conversation_history.append({"role": "assistant", "content": response})
-                print(f"\n================================ End of iteration {iteration} ==========================================\n")
-            else:
+            # None = no tool call found → exit loop
+            # SystemError = fatal dispatch error → exit loop (stop)
+            # ToolResult = tool executed → continue loop
+            if not system_result:
                 print(f"\n========================== End of task after {iteration} iterations ====================================\n")
                 break
+
+            iteration += 1
+            result_str = str(system_result)
+            print(f"\n[Harness feeding system result back to Bob... {self._get_history_stats()}]")
+            print(f"Harness: {result_str}\n")
+            self.conversation_history.append(
+                {"role": "user", "content": result_str}
+            )
+
+            response = call_llm(
+                self.conversation_history, self.system_prompt, self.current_provider
+            )
+            print(f"Bob: {response}")
+            print(f"[Model: {self.current_provider.model}] {self._get_history_stats()} (iteration {iteration})")
+            self.conversation_history.append({"role": "assistant", "content": response})
+            print(f"\n================================ End of iteration {iteration} ==========================================\n")
         else:
             print("\n[WARNING: Task reached maximum iterations (" + str(max_iterations) + "). Stopping safety check.]")
             print("\n========================== Max Iterations Reached ====================================\n")
-            
+
         return response
 
     def _get_history_stats(self) -> str:

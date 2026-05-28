@@ -4,131 +4,198 @@ import re
 from tools.base_tool import BaseTool
 
 
-def _parse_xml_tool_call(text: str) -> dict | None:
-    """Parse XML-style tool call - handles multiple arg_key/arg_value pairs and no-arg calls."""
-    # Match the tool_call block with lazy matching
-    pattern = r'<tool_call>(.*?)</tool_call>'
-    match = re.search(pattern, text.strip(), re.DOTALL)
-    if not match:
-        # Try matching tool_call with just a tool name (no closing tag, args come after)
-        simple_pattern = r'<tool_call>\s*(\w+)'
-        simple_match = re.search(simple_pattern, text.strip())
-        if simple_match:
-            tool_name = simple_match.group(1).strip()
-            if tool_name and tool_name not in ("arg_key", "arg_value"):
-                return {"name": tool_name, "arguments": {}}
-        return None
-    
-    tool_content = match.group(1).strip()
-    
-    try:
-        # Parse tool name (first word before any whitespace or tag)
-        parts = tool_content.split('>')
-        tool_name = parts[0].strip()
-        
-        # Get ALL arg_key and arg_value pairs
-        arg_keys = re.findall(r'<arg_key>\s*(\w+)\s*</arg_key>', tool_content)
-        arg_values = re.findall(r'<arg_value>\s*(.*?)\s*</arg_value>', tool_content, re.DOTALL)
-        
-        if arg_keys and arg_values:
-            # Combine key-value pairs
-            arguments = {}
-            for key, value in zip(arg_keys, arg_values):
-                arguments[key] = value.strip()
-            return {"name": tool_name, "arguments": arguments}
-        elif tool_name and tool_name not in ("arg_key", "arg_value"):
-            # No args, just tool name
-            return {"name": tool_name, "arguments": {}}
-    except Exception:
-        pass
-    
-    return None
+# ---------------------------------------------------------------------------
+# Result types
+# ---------------------------------------------------------------------------
+
+class ToolResult:
+    """Wraps a successful tool execution result."""
+
+    def __init__(self, tool_name: str, output: str):
+        self.tool_name = tool_name
+        self.output = output
+
+    def __bool__(self) -> bool:
+        return True
+
+    def __str__(self) -> str:
+        return self.output
 
 
-def _parse_colon_json_format(text: str) -> dict | None:
-    """Parse format like <tool_name>name:{args}/> or <tool_name>:{args}/>."""
-    # First extract inner content of the XML tag
-    inner_match = re.match(r'<\w+>(.+?)/?\s*>?\s*$', text.strip())
-    if not inner_match:
-        return None
-    
-    content = inner_match.group(1).strip()
-    
-    # Remove trailing / if present
-    if content.endswith('/'):
-        content = content[:-1].strip()
-    
-    # Split on first : to get tool name and args
-    if ':' not in content:
-        return None
-    
-    parts = content.split(':', 1)
-    tool_name = parts[0].strip()
-    args_str = parts[1].strip()
-    
-    # Remove surrounding { } if present
-    args_str = args_str.strip().strip('{}').strip()
-    
-    if not args_str:
-        return None
-    
-    # Try to parse as JSON
-    try:
-        args = json.loads(f'{{{args_str}}}')
-        if isinstance(args, dict):
-            return {"name": tool_name, "arguments": args}
-    except json.JSONDecodeError:
-        pass
-    
-    # Try parsing key: "value" pairs manually
-    pairs = re.findall(r'(\w+):\s*"([^"]+)"', args_str)
-    if pairs:
-        return {"name": tool_name, "arguments": dict(pairs)}
-    
-    return None
+class SystemError:
+    """Wraps a system-level error (parsing failure, invalid tool, etc.)."""
+
+    def __init__(self, message: str):
+        self.message = message
+
+    def __bool__(self) -> bool:
+        return False  # Don't continue loop on system errors
+
+    def __str__(self) -> str:
+        return self.message
 
 
-def _parse_plain_tool_call(text: str) -> dict | None:
-    """Parse simple name-only tool calls like <list_files>path</list_files>."""
-    pattern = r'<(\w+)>\s*([^\<]+)\s*</\1>'
-    match = re.search(pattern, text.strip())
-    if match:
-        tool_name = match.group(1)
-        arg_value = match.group(2).strip()
-        # Infer argument name from tool
-        tool_args = {
-            "read_file": "path",
-            "write_file": "path",
-            "edit_file": "path",
-            "list_files": "path",
-            "bash": "command",
-            "get_model_name": "path",
-        }
-        arg_name = tool_args.get(tool_name, "path")
-        return {"name": tool_name, "arguments": {arg_name: arg_value}}
-    return None
+# ---------------------------------------------------------------------------
+# Parameter normalization
+# ---------------------------------------------------------------------------
 
-
-def _dispatch_tool(tool_name: str, arguments: dict) -> str:
-    """Execute a tool and return result with parameter normalization."""
-    # Normalize common parameter name variations
-    param_mapping = {
+def _safe_dispatch(tool_name: str, arguments: dict) -> str:
+    """Execute a tool with normalized parameters and safe error handling."""
+    param_mapping: dict[str, str] = {
         "file_path": "path",
         "filename": "path",
         "directory": "path",
         "file_content": "content",
+        "contentBody": "content",
         "old_text": "search",
         "new_text": "replace",
         "cmd": "command",
+        "file_location": "path",
+        "text": "content",
+        "code": "content",
     }
-    normalized = {
-        param_mapping.get(k, k): v for k, v in arguments.items()
-    }
+    normalized = {param_mapping.get(k, k): v for k, v in arguments.items()}
     return BaseTool.dispatch(tool_name, normalized)
 
 
+# ---------------------------------------------------------------------------
+# Parser helpers
+# ---------------------------------------------------------------------------
+
+def _parse_xml_tool_call(text: str) -> dict | None:
+    """Parse XML tool_call format.
+
+    Handles:
+      - <tool_call>tool_name</tool_call>                 (zero args)
+      - <tool_call><tool_name><arg_key>...</arg_key>...</tool_call>  (wrapped with args)
+      - <tool_call>tool_name<arg_key>...</arg_key>...</tool_call>  (bare with args)
+    """
+    text = text.strip()
+
+    m = re.match(r'^<tool_call>\s*(\w+)\s*</tool_call>$', text)
+    if m:
+        return {"name": m.group(1), "arguments": {}}
+
+    full_match = re.search(r'<tool_call>\s*(.*?)\s*</tool_call>', text, re.DOTALL)
+    if not full_match:
+        return None
+
+    content = full_match.group(1).strip()
+
+    before = re.split(r'<arg_key>', content)[0].strip().lstrip('<')
+    name_match = re.match(r'^(\w+)', before)
+    if not name_match:
+        return None
+    tool_name = name_match.group(1)
+    if tool_name in ("arg_key", "arg_value"):
+        return None
+
+    keys = re.findall(r'<arg_key>\s*(\w+)\s*</arg_key>', content)
+    values = re.findall(r'<arg_value>\s*(.*?)\s*</arg_value>', content, re.DOTALL)
+    arguments = dict(zip(keys, [v.strip() for v in values]))
+
+    return {"name": tool_name, "arguments": arguments}
+
+
+def _parse_colon_json_format(text: str) -> dict | None:
+    """Parse <tool_name>:{arg: val}/> or <tool_name>name:{arg: val}/>."""
+    text = text.strip()
+
+    m = re.match(r'^<(\w+)>(.*)</\1>\s*$', text, re.DOTALL)
+    if not m:
+        return None
+    tool_name = m.group(1)
+    inner = m.group(2).strip()
+
+    if not inner:
+        return {"name": tool_name, "arguments": {}}
+
+    inner = re.sub(r'^:?\s*', '', inner).rstrip('/').strip()
+    if not inner:
+        return {"name": tool_name, "arguments": {}}
+
+    # Parse the JSON content directly
+    try:
+        parsed = json.loads(inner)
+        if isinstance(parsed, dict):
+            return {"name": tool_name, "arguments": parsed}
+    except json.JSONDecodeError:
+        pass
+
+    # Fallback: key: "value" pairs
+    pairs = re.findall(r'(\w+):\s*"([^"]*)"', inner)
+    if pairs:
+        return {"name": tool_name, "arguments": dict(pairs)}
+
+    return None
+
+
+def _parse_plain_tool_call(text: str) -> dict | None:
+    """Parse <tool>value</tool> or <tool></tool>."""
+    text = text.strip()
+
+    m_empty = re.match(r'^<(\w+)>\s*</\1>$', text)
+    if m_empty:
+        return {"name": m_empty.group(1), "arguments": {}}
+
+    m = re.match(r'^<(\w+)>\s*([^\<]+)\s*</\1>$', text)
+    if not m:
+        return None
+
+    tool_name = m.group(1)
+    inner = m.group(2).strip()
+
+    if tool_name in {"get_model_name", "list_loaded_tools"}:
+        return {"name": tool_name, "arguments": {}}
+
+    arg_map: dict[str, str] = {
+        "read_file": "path",
+        "write_file": "path",
+        "edit_file": "path",
+        "list_files": "path",
+        "bash": "command",
+    }
+    arg_name = arg_map.get(tool_name, "path")
+    return {"name": tool_name, "arguments": {arg_name: inner}}
+
+
+def _parse_json_in_code_block(text: str) -> dict | None:
+    """Parse JSON inside ```json ... ```."""
+    m = re.search(r'```json\s*\n?(.*?)\n?```', text.strip(), re.DOTALL)
+    if not m:
+        return None
+    try:
+        data = json.loads(m.group(1).strip())
+        if isinstance(data, dict) and "name" in data:
+            return {"name": data["name"], "arguments": data.get("arguments", {})}
+    except json.JSONDecodeError:
+        pass
+    return None
+
+
+def _parse_json_raw(text: str) -> dict | None:
+    """Parse bare JSON object."""
+    try:
+        data = json.loads(text.strip())
+        if isinstance(data, dict) and "name" in data:
+            return {"name": data["name"], "arguments": data.get("arguments", {})}
+    except json.JSONDecodeError:
+        pass
+    return None
+
+
+def _parse_bash_command(text: str) -> dict | None:
+    """Parse bash/sh code block into a bash tool call."""
+    m = re.search(r'```(?:bash|sh)?\s*\n?(.*?)\n?```', text.strip(), re.DOTALL)
+    if m:
+        command = m.group(1).strip()
+        if command:
+            return {"name": "bash", "arguments": {"command": command}}
+    return None
+
+
 def _parse_simple_tool_json(text: str) -> dict | None:
-    """Parse simple tool format like {"tool":"name","args":{}}."""
+    """Parse {"tool": "name", "args": {...}}."""
     try:
         data = json.loads(text.strip())
         if isinstance(data, dict):
@@ -141,112 +208,45 @@ def _parse_simple_tool_json(text: str) -> dict | None:
     return None
 
 
-def _parse_bash_command(text: str) -> dict | None:
-    """Parse bash command from markdown code blocks like ```bash ... ```."""
-    pattern = r'```(?:bash|sh)?\s*\n?(.*?)\n?```'
-    match = re.search(pattern, text.strip(), re.DOTALL)
-    if match:
-        command = match.group(1).strip()
-        if command:
-            return {"name": "bash", "arguments": {"command": command}}
-    return None
+# ---------------------------------------------------------------------------
+# Dispatch pipeline
+# ---------------------------------------------------------------------------
 
+def tool_dispatch(response: str) -> ToolResult | SystemError | None:
+    """Parse response for tool call and execute it.
 
-def _parse_json_in_code_block(text: str) -> dict | None:
-    """Parse JSON tool call inside markdown code blocks like ```json ... ```."""
-    pattern = r'```json\s*\n?(.*?)\n?```'
-    match = re.search(pattern, text.strip(), re.DOTALL)
-    if match:
+    Returns:
+      ToolResult  - tool executed successfully (truthy, loop continues)
+      SystemError - system-level error (falsy, loop stops)
+      None        - no tool call found (falsy, loop stops)
+    """
+    parsers = [
+        ("json-codeblock", _parse_json_in_code_block),
+        ("json-raw", _parse_json_raw),
+        ("simple-json", _parse_simple_tool_json),
+        ("bash-block", _parse_bash_command),
+        ("colon-xml", _parse_colon_json_format),
+        ("tool_call-xml", _parse_xml_tool_call),
+        ("plain-xml", _parse_plain_tool_call),
+    ]
+
+    for name, parser in parsers:
         try:
-            data = json.loads(match.group(1).strip())
-            if isinstance(data, dict) and 'name' in data:
-                return {'name': data['name'], 'arguments': data.get('arguments', {})}
-        except json.JSONDecodeError:
-            pass
-    return None
+            call = parser(response)
+            if call:
+                tool_name = call["name"]
+                arguments = call["arguments"]
+                print(f"\n[🔧 Harness executing: {tool_name}]")
+                output = _safe_dispatch(tool_name, arguments)
 
+                # If tool reports a system-level error, return SystemError so controller stops the loop
+                if output.startswith("[SYSTEM ERROR"):
+                    return SystemError(output)
 
-def tool_dispatch(response: str) -> str | None:
-    """Parse response for tool call (JSON or XML format) and execute it."""
-    # Try JSON in code blocks FIRST (qwen outputs ```json { ... } ```)
-    try:
-        json_call = _parse_json_in_code_block(response)
-        if json_call:
-            print(f"\n[🔧 Harness executing: {json_call['name']}]")
-            return _dispatch_tool(json_call["name"], json_call["arguments"])
-    except (KeyError, TypeError) as e:
-        return f"[SYSTEM ERROR: {str(e)}]"
-    except Exception as e:
-        return f"[SYSTEM ERROR: {str(e)}]"
-
-    # Try bash command in markdown code blocks
-    try:
-        bash_call = _parse_bash_command(response)
-        if bash_call:
-            print(f"\n[🔧 Harness executing: bash]")
-            return _dispatch_tool(bash_call["name"], bash_call["arguments"])
-    except (KeyError, TypeError) as e:
-        return f"[SYSTEM ERROR: {str(e)}]"
-    except Exception as e:
-        return f"[SYSTEM ERROR: {str(e)}]"
-
-    # Try simple tool format: {"tool":"name","args":{}}
-    try:
-        simple = _parse_simple_tool_json(response)
-        if simple:
-            print(f"\n[🔧 Harness executing: {simple['name']}]")
-            return _dispatch_tool(simple["name"], simple["arguments"])
-    except (KeyError, TypeError) as e:
-        return f"[SYSTEM ERROR: {str(e)}]"
-    except Exception as e:
-        return f"[SYSTEM ERROR: {str(e)}]"
-
-    # Try JSON format first
-    try:
-        call = json.loads(response.strip())
-        if "name" in call:
-            tool_name = call["name"]
-            arguments = call.get("arguments") or {}
-            print(f"\n[🔧 Harness executing: {tool_name}]")
-            return _dispatch_tool(tool_name, arguments)
-    except json.JSONDecodeError:
-        pass  # Not JSON, try other formats
-    except (KeyError, TypeError) as e:
-        return f"[SYSTEM ERROR: {str(e)}]"
-    except Exception as e:
-        return f"[SYSTEM ERROR: {str(e)}]"
-
-    # Try colon JSON format: <tool_name>name:{args}/> or <tool>:{args}/>
-    try:
-        json_call = _parse_colon_json_format(response)
-        if json_call:
-            print(f"\n[🔧 Harness executing: {json_call['name']}]")
-            return _dispatch_tool(json_call["name"], json_call["arguments"])
-    except (KeyError, TypeError) as e:
-        return f"[SYSTEM ERROR: {str(e)}]"
-    except Exception as e:
-        return f"[SYSTEM ERROR: {str(e)}]"
-
-    # Try XML tool_call format
-    try:
-        xml_call = _parse_xml_tool_call(response)
-        if xml_call:
-            print(f"\n[🔧 Harness executing: {xml_call['name']}]")
-            return _dispatch_tool(xml_call["name"], xml_call["arguments"])
-    except (KeyError, TypeError) as e:
-        return f"[SYSTEM ERROR: {str(e)}]"
-    except Exception as e:
-        return f"[SYSTEM ERROR: {str(e)}]"
-
-    # Try simple XML format
-    try:
-        simple_call = _parse_plain_tool_call(response)
-        if simple_call:
-            print(f"\n[🔧 Harness executing: {simple_call['name']}]")
-            return _dispatch_tool(simple_call["name"], simple_call["arguments"])
-    except (KeyError, TypeError) as e:
-        return f"[SYSTEM ERROR: {str(e)}]"
-    except Exception as e:
-        return f"[SYSTEM ERROR: {str(e)}]"
+                return ToolResult(tool_name, output)
+        except Exception as e:
+            msg = f"[DISPATCH PARSER '{name}' ERROR: {e}]"
+            print(msg)
+            return SystemError(msg)
 
     return None

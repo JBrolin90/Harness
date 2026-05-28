@@ -1,82 +1,140 @@
-import requests
+"""LLM request handler - brain of the agent."""
 import json
 import os
+import requests
 from provider import ProviderConfig
 
-def call_llm(history, system_prompt, config: ProviderConfig):
+
+def _parse_tool_call(message: dict) -> str | None:
+    """Extract and serialize a tool call from a message dict.
+
+    Handles both OpenAI and Ollama tool_call formats where arguments
+    might be a dict, string, or JSON string.
+
+    Args:
+        message: A message dict that may contain tool_calls.
+
+    Returns:
+        JSON string {"name": <tool>, "arguments": <args>} or None if no tool call.
+    """
+    tool_calls = message.get('tool_calls')
+    if not tool_calls:
+        return None
+
+    call = tool_calls[0]
+    fn = call.get('function', {})
+
+    name = fn.get('name')
+    if not name:
+        return None
+
+    arguments = fn.get('arguments', '{}')
+    if isinstance(arguments, str):
+        try:
+            arguments = json.loads(arguments)
+        except json.JSONDecodeError:
+            # If it's not valid JSON, treat as a malformed argument
+            arguments = {"_raw": arguments}
+
+    return json.dumps({"name": name, "arguments": arguments})
+
+
+def _get_content(message: dict | None) -> str:
+    """Safely extract content from a message dict."""
+    if message is None:
+        return ""
+    return message.get('content', "") or ""
+
+
+def call_llm(history: list, system_prompt: str, config: ProviderConfig) -> str:
     """Unified LLM request handler using a ProviderConfig object."""
-    
     # Resolve API key from environment variable if specified
     resolved_api_key = os.environ.get(config.api_key_env_var, "") if config.api_key_env_var else ""
-    if not resolved_api_key and config.provider_type != "ollama": # Ollama might not need a real key, but others do
+    if not resolved_api_key and config.provider_type != "ollama":
         print(f"[WARNING: API key for {config.name} not found in environment variable '{config.api_key_env_var}']")
 
     headers = {
         "Authorization": f"Bearer {resolved_api_key}",
         "Content-Type": "application/json"
     }
-    
+
     messages = [{"role": "system", "content": system_prompt}]
     messages += history
-    
+
     payload = {
         "model": config.model,
         "messages": messages,
         "stream": config.attributes.get("stream", False)
     }
-    
+
     # Add response_format if specified in attributes
     if "response_format" in config.attributes:
         payload["response_format"] = config.attributes["response_format"]
-    
-    # Add tools if provider supports native function calling
+
+    # Only attach tools for providers that actually support function calling
     if config.tools:
         payload["tools"] = config.tools
-    
+
     try:
-        response = requests.post(config.url, headers=headers, json=payload, timeout=180) 
+        response = requests.post(config.url, headers=headers, json=payload, timeout=180)
         response.raise_for_status()
         data = response.json()
-        
-        # Handle MiniMax/OpenAI vs Ollama formats
-        if config.provider_type == "minimax" or 'choices' in data:
-            # MiniMax / OpenAI style - check for tool calls
-            message = data['choices'][0]['message']
-            content = message.get('content', '')
-            
-            # Check if model made a tool call (OpenAI style)
-            if 'tool_calls' in message and message['tool_calls']:
-                tool_call = message['tool_calls'][0]
-                tool_name = tool_call['function']['name']
-                arguments = tool_call['function']['arguments']
-                
-                # Parse arguments if they're a JSON string
-                if isinstance(arguments, str):
-                    arguments = json.loads(arguments)
-                
-                return json.dumps({"name": tool_name, "arguments": arguments})
-            
-            return content
+
+        # Dispatch to provider-specific handler
+        if config.provider_type == "ollama":
+            return _handle_ollama_response(data)
         else:
-            # Ollama style
-            message = data['message']
-            content = message.get('content', '')
-            
-            # Check if model made a tool call (Ollama also returns tool_calls)
-            if 'tool_calls' in message and message['tool_calls']:
-                tool_call = message['tool_calls'][0]
-                tool_name = tool_call['function']['name']
-                arguments = tool_call['function']['arguments']
-                
-                # Parse arguments if they're a JSON string
-                if isinstance(arguments, str):
-                    arguments = json.loads(arguments)
-                
-                return json.dumps({"name": tool_name, "arguments": arguments})
-            
-            return content
-        
+            return _handle_openai_style_response(data)
+
+    except requests.HTTPError as e:
+        status = e.response.status_code if e.response is not None else "unknown"
+        text = e.response.text if e.response is not None else "no response body"
+        print(f"[BRAIN HTTP ERROR: {status} {text}]")
+        return f"[BRAIN ERROR: HTTP {status}]"
+    except json.JSONDecodeError as e:
+        print(f"[BRAIN JSON ERROR: {e}]")
+        return "[BRAIN ERROR: Invalid JSON response from API]"
     except Exception as e:
-        print(f"Error processing request to {config.url}: {e}")
-        error_details = str(e)
-        return f"[BRAIN ERROR: {str(e)}\nDetails: {error_details}]"
+        print(f"[BRAIN ERROR: {e}]")
+        return f"[BRAIN ERROR: {e}]"
+
+
+def _handle_openai_style_response(data: dict) -> str:
+    """Handle MiniMax/OpenAI/OpenRouter style responses."""
+    # Guard: check for presence and non-emptiness of choices
+    if 'choices' not in data:
+        return "[BRAIN ERROR: Missing 'choices' in response]"
+
+    choices = data['choices']
+    if not choices:
+        return "[BRAIN ERROR: Empty choices array]"
+
+    message = choices[0].get('message')
+    if message is None:
+        return "[BRAIN ERROR: choices[0].message is None]"
+
+    # Try tool call first
+    tool_result = _parse_tool_call(message)
+    if tool_result is not None:
+        return tool_result
+
+    # Fall back to text content
+    return _get_content(message)
+
+
+def _handle_ollama_response(data: dict) -> str:
+    """Handle Ollama style responses."""
+    if 'message' not in data:
+        return "[BRAIN ERROR: Missing 'message' in Ollama response]"
+
+    message = data['message']
+    if message is None:
+        return "[BRAIN ERROR: message is None in Ollama response]"
+
+    # Try tool call first
+    tool_result = _parse_tool_call(message)
+    if tool_result is not None:
+        return tool_result
+
+    # Fall back to text content
+    return _get_content(message)
