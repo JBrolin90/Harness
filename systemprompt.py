@@ -2,7 +2,19 @@
 import os
 from typing import TYPE_CHECKING
 from tools.base_tool import BaseTool
-from AGENT import AGENT_md_INGESTIOR
+from agent import get_agent_py
+
+# Cached content loaded via config
+_cached_agent_py: str | None = None
+_cached_memory_instructions: str | None = None
+
+
+def _get_agent_py_cached() -> str:
+    """Get cached AGENT.py content."""
+    global _cached_agent_py
+    if _cached_agent_py is None:
+        _cached_agent_py = get_agent_py()
+    return _cached_agent_py
 
 if TYPE_CHECKING:
     from memory import Memory
@@ -24,11 +36,15 @@ def _build_memory_section(memory: "Memory | None") -> str:
 
 def _build_memory_instructions() -> str:
     """Build memory instructions section if memory_instructions.md exists."""
-    from memory import load_memory_instructions
-    instructions = load_memory_instructions()
-    if instructions:
-        return f"\n=== MEMORY SYSTEM INSTRUCTIONS ===\n{instructions}\n==================================="
-    return ""
+    global _cached_memory_instructions
+    if _cached_memory_instructions is None:
+        import config
+        instructions = config.load("memory_instructions.md")
+        if instructions:
+            _cached_memory_instructions = f"\n=== MEMORY SYSTEM INSTRUCTIONS ===\n{instructions}\n==================================="
+        else:
+            _cached_memory_instructions = ""
+    return _cached_memory_instructions
 
 
 def _build_tools_section() -> str:
@@ -67,7 +83,7 @@ Current Working Directory: {os.getcwd()}
 
 {additions}
 
-{AGENT_md_INGESTIOR()}
+{_get_agent_py_cached()}
 {memory_section}
 {memory_instructions}
 """
