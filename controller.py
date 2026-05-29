@@ -18,9 +18,28 @@ class HarnessController:
         set_current_provider(self.current_provider)
         self.tool_engine = tool_dispatch
         self.system_prompt = ""
+        self._cached_system_prompt: str | None = None
+        self._last_memory_content: str = ""
         self.conversation_history = []
         self.memory = get_memory(memory_path)
         self._setup_tools()
+        self._preload_system_prompt()
+
+    def _preload_system_prompt(self):
+        """Pre-load system prompt at startup to cache AGENT.py and memory_instructions.md."""
+        self.system_prompt = build_system_prompt(self.memory)
+        self._cached_system_prompt = self.system_prompt
+        self._last_memory_content = str(self.memory.get_all())
+        print(f"[Config preloaded]")
+
+    def _get_cached_system_prompt(self) -> str:
+        """Get cached system prompt, rebuilding only if memory changed."""
+        current_memory = str(self.memory.get_all())
+        if current_memory != self._last_memory_content:
+            # Memory changed, rebuild system prompt
+            self._cached_system_prompt = build_system_prompt(self.memory)
+            self._last_memory_content = current_memory
+        return self._cached_system_prompt
 
     def _setup_tools(self):
         """Build tools list from registered BaseTool classes and attach to provider."""
@@ -39,7 +58,7 @@ class HarnessController:
 
     def run_task(self, prompt: str, max_iterations: int = 10) -> str:
         """Execute a task with the given prompt. Returns the final response."""
-        self.system_prompt = build_system_prompt(self.memory)
+        self.system_prompt = self._get_cached_system_prompt()
 
         self.conversation_history.append({"role": "user", "content": prompt})
 
