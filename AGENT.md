@@ -1,10 +1,5 @@
-# Project Rules & Constraints
+# Agent Instructions
 
-This file defines the specific operational boundaries for the current project. 
-The agent must adhere to these rules at all times.
+See [memory_instructions.md](memory_instructions.md) for long-term memory management.
 
-## Current Project Rules
-1. **Tool Use**: Stick to the regex-based tool system. Do not attempt to use JSON tool calling.
-2. **Maintenance**: Maintain `project.md` in the CWD as the primary technical log.
-3. **Scope**: Focus on the Harness framework improvements and persona alignment.
-4. **Stability**: Prioritize backwards compatibility for 7B models when modifying tools.
+At the start of each session, read `memory_instructions.md` and check for relevant context in `memory.md` before asking basic questions.

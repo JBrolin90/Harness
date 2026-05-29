@@ -1,18 +1,131 @@
 [
     {
-        "name": "cloud-pro",
-        "provider_type": "minimax",
-        "url": "https://api.minimax.io/v1/text/chatcompletion_v2",
-        "model": "MiniMax-M2.7",
-        "api_key_env_var": "MINIMAX_API_KEY",
-        "attributes": {}
+        "name": "Poolside-laguna-free",
+        "provider_type": "openai",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "model": "poolside/laguna-m.1:free",
+        "api_key_env_var": "OPENROUTER_API_KEY",
+        "attributes": {},
+        "tools": []
     },
     {
-        "name": "local-coder",
+        "name": "deepseek-free",
+        "provider_type": "openrouter",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "model": "deepseek/deepseek-v4-flash",
+        "api_key_env_var": "OPENROUTER_API_KEY",
+        "attributes": {
+            "response_format": {
+                "type": "json_object"
+            }
+        },
+        "tools": []
+    },
+    {
+        "name": "Gemm4-26b-free",
+        "provider_type": "openrouter",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "model": "google/gemma-4-26b-a4b-it:free",
+        "api_key_env_var": "OPENROUTER_API_KEY",
+        "attributes": {
+            "response_format": {
+                "type": "json_object"
+            }
+        },
+        "tools": []
+    },
+    {
+        "name": "Qwen2.5-coder-14b",
         "provider_type": "ollama",
         "url": "http://localhost:11434/api/chat",
-        "model": "qwen2.5-coder:7b",
+        "model": "qwen2.5-coder:14b",
         "api_key_env_var": "OLLAMA_DUMMY_KEY",
-        "attributes": {}
+        "attributes": {
+            "response_format": {
+                "type": "json_object"
+            }
+        },
+        "tools": []
+    },
+    {
+        "name": "qwen3-next-80b",
+        "provider_type": "openrouter",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "model": "qwen/qwen3-next-80b-a3b-instruct:free",
+        "api_key_env_var": "OPENROUTER_API_KEY",
+        "attributes": {},
+        "tools": []
+    },
+    {
+        "name": "qwen2.5-coder-7b-instruct-q8",
+        "provider_type": "ollama",
+        "url": "http://localhost:11434/api/chat",
+        "model": "qwen2.5-coder:7b-instruct-q8_0",
+        "api_key_env_var": "OLLAMA_DUMMY_KEY",
+        "attributes": {},
+        "tools": []
+    },
+    {
+        "name": "nomic-embed-text",
+        "provider_type": "ollama",
+        "url": "http://localhost:11434/api/chat",
+        "model": "nomic-embed-text:latest",
+        "api_key_env_var": "OLLAMA_DUMMY_KEY",
+        "attributes": {},
+        "tools": []
+    },
+    {
+        "name": "gemma4-4b-ollama",
+        "provider_type": "ollama",
+        "url": "http://localhost:11434/api/chat",
+        "model": "gemma4:e4b",
+        "api_key_env_var": "OLLAMA_DUMMY_KEY",
+        "attributes": {},
+        "tools": []
+    },
+    {
+        "name": "llama3.2",
+        "provider_type": "ollama",
+        "url": "http://localhost:11434/api/chat",
+        "model": "llama3.2:latest",
+        "api_key_env_var": "OLLAMA_DUMMY_KEY",
+        "attributes": {},
+        "tools": []
+    },
+    {
+        "name": "deepseek-coder-6.7b",
+        "provider_type": "ollama",
+        "url": "http://localhost:11434/api/chat",
+        "model": "deepseek-coder:6.7b",
+        "api_key_env_var": "OLLAMA_DUMMY_KEY",
+        "attributes": {},
+        "tools": []
+    },
+    {
+        "name": "qwen2.5-coder-3b",
+        "provider_type": "ollama",
+        "url": "http://localhost:11434/api/chat",
+        "model": "qwen2.5-coder:3b",
+        "api_key_env_var": "OLLAMA_DUMMY_KEY",
+        "attributes": {},
+        "tools": []
+    },
+    {
+        "name": "llama3.1-8b",
+        "provider_type": "ollama",
+        "url": "http://localhost:11434/api/chat",
+        "model": "llama3.1:8b",
+        "api_key_env_var": "OLLAMA_DUMMY_KEY",
+        "attributes": {},
+        "tools": []
+    },
+    {
+        "name": "qwen2.5-coder-1.5b",
+        "provider_type": "ollama",
+        "url": "http://localhost:11434/api/chat",
+        "model": "qwen2.5-coder:1.5b",
+        "api_key_env_var": "OLLAMA_DUMMY_KEY",
+        "attributes": {},
+        "tools": []
     }
 ]
