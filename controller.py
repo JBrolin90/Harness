@@ -5,12 +5,13 @@ from provider import ProviderManager
 from systemprompt import build_system_prompt
 from tools.core_config import set_current_provider
 from tools.base_tool import BaseTool
+from memory import get_memory, load_memory_instructions
 
 
 class HarnessController:
     """Agent controller with instance-based state for modularity and testability."""
 
-    def __init__(self, provider_name: str = "cloud-pro"):
+    def __init__(self, provider_name: str = "cloud-pro", memory_path: str | None = None):
         terminal_history_upgrade()
 
         self.current_provider = ProviderManager().get_provider(provider_name)
@@ -18,6 +19,7 @@ class HarnessController:
         self.tool_engine = tool_dispatch
         self.system_prompt = ""
         self.conversation_history = []
+        self.memory = get_memory(memory_path)
         self._setup_tools()
 
     def _setup_tools(self):
@@ -37,7 +39,7 @@ class HarnessController:
 
     def run_task(self, prompt: str, max_iterations: int = 10) -> str:
         """Execute a task with the given prompt. Returns the final response."""
-        self.system_prompt = build_system_prompt()
+        self.system_prompt = build_system_prompt(self.memory)
 
         self.conversation_history.append({"role": "user", "content": prompt})
 
@@ -83,6 +85,23 @@ class HarnessController:
             print("\n========================== Max Iterations Reached ====================================\n")
 
         return response
+
+    def remember(self, section: str, item: str) -> str:
+        """Add an item to a memory section."""
+        self.memory.add(section, item)
+        return f"[Memory] Added to '{section}': {item}"
+
+    def search_memory(self, query: str) -> list[tuple[str, str]]:
+        """Search memory for items matching query."""
+        return self.memory.find(query)
+
+    def get_memory_section(self, section: str) -> list[str]:
+        """Get all items in a memory section."""
+        return self.memory.get(section)
+
+    def get_memory_instructions(self) -> str | None:
+        """Load memory instructions if available."""
+        return load_memory_instructions()
 
     def _get_history_stats(self) -> str:
         """Return conversation stats string."""

@@ -171,6 +171,67 @@ class TestControllerModuleLevelFunctions:
             controller.run_task("test")
 
 
+class TestMemoryIntegration:
+    """Tests for memory integration in HarnessController."""
+
+    @pytest.fixture
+    def controller(self):
+        with patch('controller.terminal_history_upgrade'), \
+             patch('controller.ProviderManager') as mock_pm_class, \
+             patch('controller.get_memory') as mock_get_memory:
+            mock_pm_instance = MagicMock()
+            mock_pm_class.return_value = mock_pm_instance
+            mock_provider = MagicMock()
+            mock_pm_instance.get_provider.return_value = mock_provider
+
+            mock_memory = MagicMock()
+            mock_get_memory.return_value = mock_memory
+
+            from controller import HarnessController
+            ctrl = HarnessController()
+            return ctrl
+
+    def test_controller_has_memory(self, controller):
+        """Controller should have memory attribute."""
+        assert hasattr(controller, 'memory')
+
+    def test_remember_adds_to_memory(self, controller):
+        """remember() should add item to memory section."""
+        controller.memory.add = MagicMock()
+
+        result = controller.remember("Personal", "User prefers dark mode")
+
+        controller.memory.add.assert_called_once_with("Personal", "User prefers dark mode")
+        assert "Added to 'Personal'" in result
+
+    def test_search_memory_returns_results(self, controller):
+        """search_memory() should return find results."""
+        expected = [("Personal", "User works with Python")]
+        controller.memory.find.return_value = expected
+
+        result = controller.search_memory("Python")
+
+        controller.memory.find.assert_called_once_with("Python")
+        assert result == expected
+
+    def test_get_memory_section_returns_list(self, controller):
+        """get_memory_section() should return section items."""
+        expected = ["Item 1", "Item 2"]
+        controller.memory.get.return_value = expected
+
+        result = controller.get_memory_section("Preferences")
+
+        controller.memory.get.assert_called_once_with("Preferences")
+        assert result == expected
+
+    def test_get_memory_instructions_returns_string_or_none(self, controller):
+        """get_memory_instructions() should return instructions or None."""
+        with patch('controller.load_memory_instructions') as mock_load:
+            mock_load.return_value = "Memory instructions content"
+            result = controller.get_memory_instructions()
+            assert result == "Memory instructions content"
+
+
 class TestToolEngineIntegration:
     """Tests for ToolEngine integration in controller."""
 

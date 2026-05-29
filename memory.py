@@ -1,5 +1,4 @@
 """Long-term memory management for the agent."""
-import os
 from pathlib import Path
 from typing import Optional, Union
 
