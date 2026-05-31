@@ -1,46 +1,16 @@
-"""Tool dispatch - parses JSON or XML tool calls and executes them."""
+"""Tool dispatch - parses LLMResponse for tool calls and executes them."""
 import json
 import re
 from tools.base_tool import BaseTool
-
-
-# ---------------------------------------------------------------------------
-# Result types
-# ---------------------------------------------------------------------------
-
-class ToolResult:
-    """Wraps a successful tool execution result."""
-
-    def __init__(self, tool_name: str, output: str):
-        self.tool_name = tool_name
-        self.output = output
-
-    def __bool__(self) -> bool:
-        return True
-
-    def __str__(self) -> str:
-        return self.output
-
-
-class SystemError:
-    """Wraps a system-level error (parsing failure, invalid tool, etc.)."""
-
-    def __init__(self, message: str):
-        self.message = message
-
-    def __bool__(self) -> bool:
-        return False  # Don't continue loop on system errors
-
-    def __str__(self) -> str:
-        return self.message
+from response import LLMResponse, ToolResult, SystemError, NoToolFound
 
 
 # ---------------------------------------------------------------------------
 # Parameter normalization
 # ---------------------------------------------------------------------------
 
-def _safe_dispatch(tool_name: str, arguments: dict) -> str:
-    """Execute a tool with normalized parameters and safe error handling."""
+def _normalize_arguments(arguments: dict) -> dict:
+    """Normalize parameter names for common LLM aliases."""
     param_mapping: dict[str, str] = {
         "file_path": "path",
         "filename": "path",
@@ -53,8 +23,14 @@ def _safe_dispatch(tool_name: str, arguments: dict) -> str:
         "file_location": "path",
         "text": "content",
         "code": "content",
+        "old_content": "search",
     }
     normalized = {param_mapping.get(k, k): v for k, v in arguments.items()}
+    return normalized
+
+def _safe_dispatch(tool_name: str, arguments: dict) -> str:
+    """Execute a tool with normalized parameters and safe error handling."""
+    normalized = _normalize_arguments(arguments)
     return BaseTool.dispatch(tool_name, normalized)
 
 
@@ -159,7 +135,7 @@ def _parse_plain_tool_call(text: str) -> dict | None:
     return {"name": tool_name, "arguments": {arg_name: inner}}
 
 
-def _parse_json_in_code_block(text: str) -> dict | None:
+def extract_json_string(text: str) -> dict | None:
     """Parse JSON inside ```json ... ```."""
     m = re.search(r'```json\s*\n?(.*?)\n?```', text.strip(), re.DOTALL)
     if not m:
@@ -184,7 +160,7 @@ def _parse_json_raw(text: str) -> dict | None:
     return None
 
 
-def _parse_bash_command(text: str) -> dict | None:
+def parse_bash_command(text: str) -> dict | None:
     """Parse bash/sh code block into a bash tool call."""
     m = re.search(r'```(?:bash|sh)?\s*\n?(.*?)\n?```', text.strip(), re.DOTALL)
     if m:
@@ -212,41 +188,67 @@ def _parse_simple_tool_json(text: str) -> dict | None:
 # Dispatch pipeline
 # ---------------------------------------------------------------------------
 
-def tool_dispatch(response: str) -> ToolResult | SystemError | None:
+def dispatch(response: LLMResponse) -> ToolResult | SystemError | NoToolFound:
     """Parse response for tool call and execute it.
 
     Returns:
       ToolResult  - tool executed successfully (truthy, loop continues)
       SystemError - system-level error (falsy, loop stops)
-      None        - no tool call found (falsy, loop stops)
+      NoToolFound - no tool call found (falsy, loop stops)
     """
+    if response.error:
+        return SystemError(response.error)
+
+    # 1. Native tool calls
+    if response.has_tool_calls:
+        tc = response.first_tool_call
+        if tc:
+            return _execute_call(tc.name, tc.arguments)
+
+    # 2. String parsing fallback
+    if not response.text:
+        return NoToolFound()
+
     parsers = [
-        ("json-codeblock", _parse_json_in_code_block),
+        ("json-codeblock", extract_json_string),
         ("json-raw", _parse_json_raw),
         ("simple-json", _parse_simple_tool_json),
-        ("bash-block", _parse_bash_command),
+        ("bash-block", parse_bash_command),
         ("colon-xml", _parse_colon_json_format),
         ("tool_call-xml", _parse_xml_tool_call),
         ("plain-xml", _parse_plain_tool_call),
     ]
 
-    for name, parser in parsers:
+    text = response.text
+    for parser_name, parser in parsers:
         try:
-            call = parser(response)
+            call = parser(text)
             if call:
-                tool_name = call["name"]
-                arguments = call["arguments"]
-                print(f"\n[🔧 Harness executing: {tool_name}]")
-                output = _safe_dispatch(tool_name, arguments)
-
-                # If tool reports a system-level error, return SystemError so controller stops the loop
-                if output.startswith("[SYSTEM ERROR"):
-                    return SystemError(output)
-
-                return ToolResult(tool_name, output)
+                return _execute_call(call["name"], call["arguments"])
         except Exception as e:
-            msg = f"[DISPATCH PARSER '{name}' ERROR: {e}]"
-            print(msg)
-            return SystemError(msg)
+            return SystemError(f"[DISPATCH PARSER '{parser_name}' ERROR: {e}]")
 
-    return None
+    return NoToolFound()
+
+
+def _execute_call(tool_name: str, arguments: dict) -> ToolResult | SystemError:
+    """Internal helper to execute a tool and wrap the result."""
+    print(f"\n[🔧 Harness executing: {tool_name}]")
+    output = _safe_dispatch(tool_name, arguments)
+
+    if output.startswith("[SYSTEM ERROR"):
+        return SystemError(output)
+
+    return ToolResult(tool_name, output)
+
+
+def dispatch_iteration(responses: list[LLMResponse]) -> list[ToolResult | SystemError]:
+    """Process a list of responses (multi-choice) and execute tools."""
+    results = []
+    for resp in responses:
+        res = dispatch(resp)
+        if isinstance(res, (ToolResult, SystemError)):
+            results.append(res)
+        if isinstance(res, SystemError):
+            break # Stop processing if a SystemError occurs
+    return results
