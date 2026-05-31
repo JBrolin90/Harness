@@ -1,5 +1,6 @@
-import argparse
 import controller
+
+VERSION = "0.3.0"
 
 def main():
     parser = argparse.ArgumentParser(description="Bob-Harness CLI")
@@ -12,7 +13,7 @@ def main():
 
     ctrl = controller.HarnessController(args.provider)
 
-    print("Bob-Vanilla-Harness v0.1 initialized.")
+    print(f"Bob-Vanilla-Harness v{VERSION} initialized.")
     print("Type 'exit' to quit.")
 
     while True:

@@ -1,5 +1,4 @@
 """Memory management tool for long-term memory operations."""
-from typing import Any
 from memory import Memory, get_memory
 from .base_tool import BaseTool
 

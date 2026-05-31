@@ -1,11 +1,13 @@
+"""Agent controller with instance-based state for modularity and testability."""
 from brain import call_llm
-from tool_dispatch import tool_dispatch
+from tool_dispatch import dispatch, extract_json_string, parse_bash_command
 from terminal_history import terminal_history_upgrade
 from provider import ProviderManager
 from systemprompt import build_system_prompt
 from tools.core_config import set_current_provider
 from tools.base_tool import BaseTool
 from memory import get_memory, load_memory_instructions
+from response import LLMResponse, ToolResult, SystemError, NoToolFound
 
 
 class HarnessController:
@@ -16,9 +18,9 @@ class HarnessController:
 
         self.current_provider = ProviderManager().get_provider(provider_name)
         set_current_provider(self.current_provider)
-        self.tool_engine = tool_dispatch
+        self.tool_engine = dispatch
         self.system_prompt = ""
-        self._cached_system_prompt: str | None = None
+        self._cached_system_prompt: str = ""
         self._last_memory_content: str = ""
         self.conversation_history = []
         self.memory = get_memory(memory_path)
@@ -30,7 +32,7 @@ class HarnessController:
         self.system_prompt = build_system_prompt(self.memory)
         self._cached_system_prompt = self.system_prompt
         self._last_memory_content = str(self.memory.get_all())
-        print(f"[Config preloaded]")
+        print("[Config preloaded]")
 
     def _get_cached_system_prompt(self) -> str:
         """Get cached system prompt, rebuilding only if memory changed."""
@@ -56,7 +58,7 @@ class HarnessController:
             })
         self.current_provider.tools = tools
 
-    def run_task(self, prompt: str, max_iterations: int = 10) -> str:
+    def run_task(self, prompt: str, max_iterations: int = 25) -> str:
         """Execute a task with the given prompt. Returns the final response."""
         self.system_prompt = self._get_cached_system_prompt()
 
@@ -65,28 +67,68 @@ class HarnessController:
         print(f"\n[Task Started] {self._get_history_stats()}")
 
         print(f"[Thinking with {self.current_provider.name} / {self.current_provider.model}...]")
-        response = call_llm(
+        response: LLMResponse = call_llm(
             self.conversation_history, self.system_prompt, self.current_provider
         )
-        print(f"Bob: {response}")
-        self.conversation_history.append({"role": "assistant", "content": response})
+        print(f"[Model response type: {'tool_call' if response.has_tool_calls else 'text'}]")
 
-        # The Autonomous Tool Loop (ReAct)
+        # Print and store assistant response (preserving thoughts)
+        full_assistant_text = str(response.text or "")
+        if response.has_tool_calls:
+            tool_names = ", ".join(tc.name for tc in response.tool_calls)
+            print(f"Bob: {full_assistant_text} [🔧 Calling: {tool_names}]")
+        else:
+            print(f"Bob: {full_assistant_text}")
+        
+        # Record assistant turn (ensure role sequence is preserved)
+        assistant_msg = f"[Executed Action]: {full_assistant_text}" if response.has_tool_calls else full_assistant_text
+        self.conversation_history.append({"role": "assistant", "content": str(assistant_msg)})
+
+        # The Autonomous Tool Loop - now using structured responses
         iteration = 0
+        last_action_sig = None
+        last_assistant_text = ""
         while iteration < max_iterations:
-            system_result = self.tool_engine(response)
+            # Calculate action signature (valid tool or raw block) for loop detection
+            current_tc = response.first_tool_call
+            if current_tc:
+                current_action_sig = f"{current_tc.name}({current_tc.arguments})"
+            else:
+                # Extract raw blocks even if parsing failed, to detect repetitive invalid attempts
+                raw_json = extract_json_string(full_assistant_text)
+                raw_bash = parse_bash_command(full_assistant_text)
+                current_action_sig = raw_json or raw_bash
 
-            # None = no tool call found → exit loop
-            # SystemError = fatal dispatch error → exit loop (stop)
+            # Detect immediate repetition to break loops in smaller models
+            if (current_action_sig and current_action_sig == last_action_sig) or \
+               (iteration > 0 and full_assistant_text.strip() == last_assistant_text.strip() and full_assistant_text.strip()):
+                result_str = "Observation: !!! REPETITION ERROR !!! You are repeating yourself. You already have this result in history. Look at previous Observations. Provide your Final Answer now or try a DIFFERENT approach."
+                result = ToolResult(tool_name="system", output=result_str)
+            else:
+                # Dispatch tool call from structured response
+                result = self.tool_engine(response)
+            
+            last_assistant_text = str(full_assistant_text)
+            last_action_sig = current_action_sig
+
+            # SystemError = fatal dispatch error → exit loop
             # ToolResult = tool executed → continue loop
-            if not system_result:
+            if isinstance(result, NoToolFound):
                 print(f"\n========================== End of task after {iteration} iterations ====================================\n")
                 break
+            
+            if isinstance(result, SystemError):
+                print(f"\n[SYSTEM ERROR] {result.message}")
+                print("\n========================== Task stopped due to system error ====================================\n")
+                break
 
+            # ToolResult - tool executed successfully, continue loop
             iteration += 1
-            result_str = str(system_result)
+            result_str = str(result.output) if result.tool_name == "system" else f"Observation: {str(result.output)}"
             print(f"\n[Harness feeding result back to Bob... {self._get_history_stats()}]")
             print(f"Harness: {result_str}\n")
+            
+            # Append tool result as user message for next LLM call
             self.conversation_history.append(
                 {"role": "user", "content": result_str}
             )
@@ -95,15 +137,26 @@ class HarnessController:
             response = call_llm(
                 self.conversation_history, self.system_prompt, self.current_provider
             )
-            print(f"Bob: {response}")
+            print(f"[Model response type: {'tool_call' if response.has_tool_calls else 'text'}]")
+            
+            full_assistant_text = str(response.text or "")
+            if response.has_tool_calls:
+                tool_names = ", ".join(tc.name for tc in response.tool_calls)
+                print(f"Bob: {full_assistant_text} [🔧 Calling: {tool_names}]")
+            else:
+                print(f"Bob: {full_assistant_text}")
+                
             print(f"[Model: {self.current_provider.model}] {self._get_history_stats()} (iteration {iteration})")
-            self.conversation_history.append({"role": "assistant", "content": response})
+            # Always append assistant turn if text exists OR tool calls were made to preserve turn order
+            if full_assistant_text.strip() or response.has_tool_calls:
+                assistant_msg = f"[Executed Action]: {full_assistant_text}" if response.has_tool_calls else full_assistant_text
+                self.conversation_history.append({"role": "assistant", "content": str(assistant_msg)})
             print(f"\n================================ End of iteration {iteration} ==========================================\n")
         else:
-            print("\n[WARNING: Task reached maximum iterations (" + str(max_iterations) + "). Stopping safety check.]")
+            print(f"\n[WARNING: Task reached maximum iterations ({max_iterations}). Stopping safety check.]")
             print("\n========================== Max Iterations Reached ====================================\n")
 
-        return response
+        return response.text if not response.has_tool_calls else str(response.tool_calls)
 
     def remember(self, section: str, item: str) -> str:
         """Add an item to a memory section."""

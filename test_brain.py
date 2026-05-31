@@ -1,4 +1,4 @@
-"""Unit tests for brain.py - LLM request handler."""
+"""Unit tests for brain.py - LLM request handler with native function calling."""
 import pytest
 import json
 import sys
@@ -7,18 +7,19 @@ from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from brain import _parse_tool_call, _get_content, call_llm, _handle_openai_style_response, _handle_ollama_response
+from brain import _parse_tool_calls, _get_content, call_llm, _handle_openai_style_response, _handle_ollama_response
+from response import LLMResponse, ToolCall
 
 
-class TestParseToolCall:
-    """Tests for _parse_tool_call helper."""
+class TestParseToolCalls:
+    """Tests for _parse_tool_calls helper."""
 
-    def test_no_tool_calls_returns_none(self):
-        """No tool_calls key should return None."""
-        assert _parse_tool_call({}) is None
-        assert _parse_tool_call({"content": "Hello"}) is None
-        assert _parse_tool_call({"tool_calls": []}) is None
-        assert _parse_tool_call({"tool_calls": None}) is None
+    def test_no_tool_calls_returns_empty_list(self):
+        """No tool_calls key should return empty list."""
+        assert _parse_tool_calls({}) == []
+        assert _parse_tool_calls({"content": "Hello"}) == []
+        assert _parse_tool_calls({"tool_calls": []}) == []
+        assert _parse_tool_calls({"tool_calls": None}) == []
 
     def test_valid_openai_style_tool_call(self):
         """OpenAI style tool_call with dict arguments."""
@@ -30,9 +31,10 @@ class TestParseToolCall:
                 }
             }]
         }
-        result = _parse_tool_call(message)
-        parsed = json.loads(result)
-        assert parsed == {"name": "read_file", "arguments": {"path": "/etc/hosts"}}
+        result = _parse_tool_calls(message)
+        assert len(result) == 1
+        assert result[0].name == "read_file"
+        assert result[0].arguments == {"path": "/etc/hosts"}
 
     def test_valid_ollama_style_tool_call(self):
         """Ollama style tool_call with nested structure."""
@@ -45,10 +47,10 @@ class TestParseToolCall:
                 }
             }]
         }
-        result = _parse_tool_call(message)
-        parsed = json.loads(result)
-        assert parsed["name"] == "read_file"
-        assert parsed["arguments"]["path"] == "/tmp/test.txt"
+        result = _parse_tool_calls(message)
+        assert len(result) == 1
+        assert result[0].name == "read_file"
+        assert result[0].arguments["path"] == "/tmp/test.txt"
 
     def test_arguments_as_json_string(self):
         """Arguments may come as a JSON string that needs parsing."""
@@ -60,9 +62,9 @@ class TestParseToolCall:
                 }
             }]
         }
-        result = _parse_tool_call(message)
-        parsed = json.loads(result)
-        assert parsed["arguments"] == {"query": "python", "limit": 5}
+        result = _parse_tool_calls(message)
+        assert len(result) == 1
+        assert result[0].arguments == {"query": "python", "limit": 5}
 
     def test_arguments_as_malformed_json_string(self):
         """Malformed JSON in arguments is handled gracefully."""
@@ -74,13 +76,13 @@ class TestParseToolCall:
                 }
             }]
         }
-        result = _parse_tool_call(message)
-        parsed = json.loads(result)
-        assert parsed["name"] == "search"
-        assert parsed["arguments"] == {"_raw": "not valid json {"}
+        result = _parse_tool_calls(message)
+        assert len(result) == 1
+        assert result[0].name == "search"
+        assert result[0].arguments == {"_raw": "not valid json {"}
 
     def test_missing_function_name(self):
-        """Tool call without function name returns None."""
+        """Tool call without function name is skipped."""
         message = {
             "tool_calls": [{
                 "function": {
@@ -88,30 +90,21 @@ class TestParseToolCall:
                 }
             }]
         }
-        assert _parse_tool_call(message) is None
+        result = _parse_tool_calls(message)
+        assert result == []
 
-    def test_missing_function_container(self):
-        """Tool call without function container returns None."""
+    def test_multiple_tool_calls(self):
+        """Multiple tool calls are all extracted."""
         message = {
-            "tool_calls": [{
-                "name": "read_file"
-            }]
+            "tool_calls": [
+                {"function": {"name": "read_file", "arguments": {"path": "/tmp/a"}}},
+                {"function": {"name": "bash", "arguments": {"command": "ls"}}}
+            ]
         }
-        assert _parse_tool_call(message) is None
-
-    def test_extra_fields_ignored(self):
-        """Extra fields in message are ignored."""
-        message = {
-            "content": "Some text",
-            "tool_calls": [{
-                "function": {
-                    "name": "test",
-                    "arguments": {}
-                }
-            }]
-        }
-        result = _parse_tool_call(message)
-        assert json.loads(result)["name"] == "test"
+        result = _parse_tool_calls(message)
+        assert len(result) == 2
+        assert result[0].name == "read_file"
+        assert result[1].name == "bash"
 
 
 class TestGetContent:
@@ -146,7 +139,11 @@ class TestHandleOpenaiStyleResponse:
                 }
             }]
         }
-        assert _handle_openai_style_response(data) == "Hello, how can I help you?"
+        result = _handle_openai_style_response(data)
+        assert isinstance(result, LLMResponse)
+        assert result.text == "Hello, how can I help you?"
+        assert result.tool_calls == []
+        assert result.error is None
 
     def test_openai_tool_call(self):
         """OpenAI style tool call."""
@@ -163,59 +160,29 @@ class TestHandleOpenaiStyleResponse:
                 }
             }]
         }
-        result = json.loads(_handle_openai_style_response(data))
-        assert result["name"] == "read_file"
-        assert result["arguments"]["path"] == "/etc/hosts"
-
-    def test_minimax_tool_call_with_json_string(self):
-        """MiniMax may return arguments as JSON string."""
-        data = {
-            "choices": [{
-                "message": {
-                    "tool_calls": [{
-                        "function": {
-                            "name": "bash",
-                            "arguments": '{"command": "ls -la"}'
-                        }
-                    }]
-                }
-            }]
-        }
-        result = json.loads(_handle_openai_style_response(data))
-        assert result["name"] == "bash"
-        assert result["arguments"] == {"command": "ls -la"}
+        result = _handle_openai_style_response(data)
+        assert isinstance(result, LLMResponse)
+        assert len(result.tool_calls) == 1
+        assert result.tool_calls[0].name == "read_file"
+        assert result.tool_calls[0].arguments["path"] == "/etc/hosts"
 
     def test_missing_choices_key(self):
-        """Missing choices key returns empty string."""
+        """Missing choices key returns error response."""
         result = _handle_openai_style_response({})
-        assert result == "[BRAIN ERROR: Missing 'choices' in response]"
+        assert isinstance(result, LLMResponse)
+        assert result.error is not None
 
     def test_empty_choices_array(self):
-        """Empty choices array returns empty string."""
+        """Empty choices array returns error response."""
         result = _handle_openai_style_response({"choices": []})
-        assert result == "[BRAIN ERROR: Empty choices array]"
+        assert isinstance(result, LLMResponse)
+        assert result.error is not None
 
     def test_message_is_none(self):
-        """choices[0].message is None returns empty string."""
+        """choices[0].message is None returns error response."""
         result = _handle_openai_style_response({"choices": [{"message": None}]})
-        assert result == "[BRAIN ERROR: choices[0].message is None]"
-
-    def test_message_key_missing(self):
-        """choices[0] has no message key."""
-        result = _handle_openai_style_response({"choices": [{}]})
-        assert result == "[BRAIN ERROR: choices[0].message is None]"
-
-    def test_content_is_none_with_no_tool_call(self):
-        """Content is None but no tool_calls."""
-        data = {
-            "choices": [{
-                "message": {
-                    "content": None
-                }
-            }]
-        }
-        result = _handle_openai_style_response(data)
-        assert result == ""
+        assert isinstance(result, LLMResponse)
+        assert result.error is not None
 
 
 class TestHandleOllamaResponse:
@@ -229,7 +196,9 @@ class TestHandleOllamaResponse:
                 "content": "I'm here to help."
             }
         }
-        assert _handle_ollama_response(data) == "I'm here to help."
+        result = _handle_ollama_response(data)
+        assert isinstance(result, LLMResponse)
+        assert result.text == "I'm here to help."
 
     def test_ollama_tool_call(self):
         """Ollama tool call."""
@@ -245,23 +214,28 @@ class TestHandleOllamaResponse:
                 }]
             }
         }
-        result = json.loads(_handle_ollama_response(data))
-        assert result["name"] == "read_file"
+        result = _handle_ollama_response(data)
+        assert isinstance(result, LLMResponse)
+        assert len(result.tool_calls) == 1
+        assert result.tool_calls[0].name == "read_file"
 
     def test_missing_message_key(self):
-        """Missing message key."""
+        """Missing message key returns error."""
         result = _handle_ollama_response({})
-        assert result == "[BRAIN ERROR: Missing 'message' in Ollama response]"
+        assert isinstance(result, LLMResponse)
+        assert result.error is not None
 
     def test_message_is_none(self):
-        """message is None."""
+        """message is None returns error."""
         result = _handle_ollama_response({"message": None})
-        assert result == "[BRAIN ERROR: message is None in Ollama response]"
+        assert isinstance(result, LLMResponse)
+        assert result.error is not None
 
     def test_content_is_none(self):
-        """Content is None."""
+        """Content is None returns empty text."""
         result = _handle_ollama_response({"message": {"content": None}})
-        assert result == ""
+        assert isinstance(result, LLMResponse)
+        assert result.text == ""
 
 
 class TestCallLlm:
@@ -276,7 +250,7 @@ class TestCallLlm:
         provider.url = "https://api.test.com/v1/chat/completions"
         provider.api_key_env_var = "TEST_API_KEY"
         provider.model = "gpt-4"
-        provider.attributes = {"stream": False}
+        provider.attributes = {}
         provider.tools = None
         return provider
 
@@ -294,7 +268,8 @@ class TestCallLlm:
 
         result = call_llm([], "You are a helpful assistant.", mock_provider)
 
-        assert result == "The capital of France is Paris."
+        assert isinstance(result, LLMResponse)
+        assert result.text == "The capital of France is Paris."
         mock_post.assert_called_once()
 
     @patch('brain.requests.post')
@@ -316,25 +291,21 @@ class TestCallLlm:
         }
 
         result = call_llm([], "Run whoami", mock_provider)
-        parsed = json.loads(result)
 
-        assert parsed["name"] == "bash"
-        assert parsed["arguments"]["command"] == "whoami"
+        assert isinstance(result, LLMResponse)
+        assert len(result.tool_calls) == 1
+        assert result.tool_calls[0].name == "bash"
+        assert result.tool_calls[0].arguments["command"] == "whoami"
 
     @patch('brain.requests.post')
     def test_http_error_handling(self, mock_post, mock_provider):
-        """HTTP errors are caught and returned as error string."""
-        mock_post.return_value.status_code = 401
-        mock_post.return_value.text = "Unauthorized"
-
-        error_response = MagicMock()
-        error_response.status_code = 401
-        error_response.text = "Unauthorized"
-        mock_post.return_value.raise_for_status.side_effect = Exception("HTTP 401")
+        """HTTP errors are caught and returned as error response."""
+        mock_post.side_effect = Exception("HTTP 401 Unauthorized")
 
         result = call_llm([], "Hello", mock_provider)
 
-        assert "[BRAIN ERROR: HTTP" in result
+        assert isinstance(result, LLMResponse)
+        assert result.error is not None
 
     @patch('brain.requests.post')
     @patch.dict(os.environ, {"TEST_API_KEY": "fake-key"})
@@ -346,7 +317,7 @@ class TestCallLlm:
         ollama_provider.url = "http://localhost:11434/api/chat"
         ollama_provider.api_key_env_var = ""
         ollama_provider.model = "llama3"
-        ollama_provider.attributes = {"stream": False}
+        ollama_provider.attributes = {}
         ollama_provider.tools = None
 
         mock_post.return_value.status_code = 200
@@ -358,7 +329,8 @@ class TestCallLlm:
 
         result = call_llm([], "Hello", ollama_provider)
 
-        assert result == "Hello from Ollama"
+        assert isinstance(result, LLMResponse)
+        assert result.text == "Hello from Ollama"
 
     @patch('brain.requests.post')
     @patch.dict(os.environ, {})
@@ -371,7 +343,25 @@ class TestCallLlm:
             }]
         }
 
-        # Should complete without raising, just printing warning
         result = call_llm([], "Hello", mock_provider)
 
-        assert result == "Response"
+        assert isinstance(result, LLMResponse)
+        assert result.text == "Response"
+
+    @patch('brain.requests.post')
+    def test_tools_are_sent_in_payload(self, mock_post, mock_provider):
+        """Tools are included in the request payload."""
+        mock_provider.tools = [
+            {"type": "function", "function": {"name": "bash", "description": "Run command", "parameters": {}}}
+        ]
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.json.return_value = {
+            "choices": [{"message": {"content": "Done"}}]
+        }
+
+        call_llm([], "Run bash", mock_provider)
+
+        call_kwargs = mock_post.call_args[1]
+        payload = call_kwargs["json"]
+        assert "tools" in payload
+        assert payload["tools"][0]["function"]["name"] == "bash"
