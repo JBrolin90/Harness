@@ -106,6 +106,76 @@ def _format_tools_for_provider(tools: list, provider_type: str) -> list | None:
         return tools
 
 
+def _make_request_with_retry(url: str, headers: dict, payload: dict, max_retries: int = 3) -> requests.Response:
+    """Make HTTP request with exponential backoff retry for transient errors.
+    
+    Retries on:
+    - HTTP 429 (rate limit) with Retry-After header support
+    - HTTP 500, 502, 503, 504 (server errors)
+    - Connection errors and timeouts
+    
+    Args:
+        url: Request URL
+        headers: Request headers
+        payload: Request body (JSON)
+        max_retries: Maximum number of retry attempts (default 3)
+    
+    Returns:
+        requests.Response object
+    
+    Raises:
+        Last exception if all retries exhausted
+    """
+    import time
+    import urllib.request
+    
+    retryable_statuses = {429, 500, 502, 503, 504}
+    last_exception = None
+    
+    for attempt in range(max_retries):
+        try:
+            response = requests.post(url, headers=headers, json=payload, timeout=(5, 180))
+            
+            if response.status_code not in retryable_statuses:
+                # Not a retryable error, return as-is
+                response.raise_for_status()
+                return response
+            
+            # Rate limited - check Retry-After header
+            if response.status_code == 429:
+                retry_after = response.headers.get('Retry-After')
+                if retry_after:
+                    wait_time = int(retry_after)
+                else:
+                    # Exponential backoff: 1s, 2s, 4s, ...
+                    wait_time = 2 ** attempt
+                print(f"[BRAIN] Rate limited. Waiting {wait_time}s before retry {attempt + 1}/{max_retries}...")
+            else:
+                # Server error - exponential backoff
+                wait_time = 2 ** attempt
+                print(f"[BRAIN] Server error {response.status_code}. Retrying in {wait_time}s ({attempt + 1}/{max_retries})...")
+            
+            time.sleep(wait_time)
+            last_exception = requests.HTTPError(response=response)
+            
+        except requests.exceptions.ConnectionError as e:
+            wait_time = 2 ** attempt
+            print(f"[BRAIN] Connection error. Retrying in {wait_time}s ({attempt + 1}/{max_retries})...")
+            time.sleep(wait_time)
+            last_exception = e
+        except requests.exceptions.Timeout as e:
+            wait_time = 2 ** attempt
+            print(f"[BRAIN] Request timeout. Retrying in {wait_time}s ({attempt + 1}/{max_retries})...")
+            time.sleep(wait_time)
+            last_exception = e
+        except Exception as e:
+            # Non-retryable exception, re-raise immediately
+            raise
+    
+    # All retries exhausted
+    raise last_exception
+
+
 def call_llm(history: list, system_prompt: str, config: ProviderConfig) -> LLMResponse:
     """Unified LLM request handler using a ProviderConfig object."""
     # Resolve API key from environment variable if specified
@@ -138,8 +208,7 @@ def call_llm(history: list, system_prompt: str, config: ProviderConfig) -> LLMRe
         payload["tools"] = formatted_tools
 
     try:
-        response = requests.post(config.url, headers=headers, json=payload, timeout=(5, 180))
-        response.raise_for_status()
+        response = _make_request_with_retry(config.url, headers=headers, payload=payload)
         data = response.json()
 
         # Dispatch to provider-specific handler

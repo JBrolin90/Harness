@@ -199,55 +199,55 @@ class TestBashToolSecurity:
         """Commands with semicolon should be rejected."""
         result = bash_tool.execute("read_file; ls")
         assert "[ERROR:" in result
-        assert "shell control characters" in result.lower()
+        assert "blocked shell characters" in result.lower()
 
     def test_rejects_command_with_and(self, bash_tool):
         """Commands with && should be rejected."""
         result = bash_tool.execute("read_file && ls")
         assert "[ERROR:" in result
-        assert "shell control characters" in result.lower()
+        assert "blocked shell characters" in result.lower()
 
     def test_rejects_command_with_pipe(self, bash_tool):
         """Commands with pipe should be rejected."""
         result = bash_tool.execute("ls | grep test")
         assert "[ERROR:" in result
-        assert "shell control characters" in result.lower()
+        assert "blocked shell characters" in result.lower()
 
     def test_rejects_command_with_output_redirect(self, bash_tool):
         """Commands with > output redirect should be rejected."""
         result = bash_tool.execute("echo hello > file.txt")
         assert "[ERROR:" in result
-        assert "shell control characters" in result.lower()
+        assert "blocked shell characters" in result.lower()
 
     def test_rejects_command_with_input_redirect(self, bash_tool):
         """Commands with < input redirect should be rejected."""
         result = bash_tool.execute("cat < input.txt")
         assert "[ERROR:" in result
-        assert "shell control characters" in result.lower()
+        assert "blocked shell characters" in result.lower()
 
     def test_rejects_command_with_dollar(self, bash_tool):
         """Commands with $ should be rejected (variable expansion)."""
         result = bash_tool.execute("echo $HOME")
         assert "[ERROR:" in result
-        assert "shell control characters" in result.lower()
+        assert "blocked shell characters" in result.lower()
 
     def test_rejects_command_with_backtick(self, bash_tool):
         """Commands with backticks should be rejected (command substitution)."""
         result = bash_tool.execute("echo `whoami`")
         assert "[ERROR:" in result
-        assert "shell control characters" in result.lower()
+        assert "blocked shell characters" in result.lower()
 
     def test_rejects_command_with_exclamation(self, bash_tool):
         """Commands with ! should be rejected (history expansion)."""
         result = bash_tool.execute("ls !")
         assert "[ERROR:" in result
-        assert "shell control characters" in result.lower()
+        assert "blocked shell characters" in result.lower()
 
     def test_rejects_command_with_subshell(self, bash_tool):
         """Commands with $() subshell should be rejected."""
         result = bash_tool.execute("ls $(pwd)")
         assert "[ERROR:" in result
-        assert "shell control characters" in result.lower()
+        assert "blocked shell characters" in result.lower()
 
     def test_accepts_whitelisted_command_without_metacharacters(self, bash_tool):
         """Approved commands without metacharacters should work."""
@@ -256,16 +256,18 @@ class TestBashToolSecurity:
             mock_run.return_value = MagicMock(stdout="result", stderr="", returncode=0)
             result = bash_tool.execute("ls")
             # Should succeed (or at least not reject with control chars error)
-            assert "shell control characters" not in result
+            assert "blocked shell characters" not in result
 
     def test_rejects_non_whitelisted_without_metacharacters_in_non_interactive(self, bash_tool):
         """Non-whitelisted commands without metacharacters should return denial in non-interactive."""
+        # git is now in approved list, so it should work in non-interactive
         with patch('sys.stdin.isatty', return_value=False):
-            result = bash_tool.execute("git status")
-            # Should be a denial, not a system error
-            assert "[ERROR:" in result or "[SYSTEM ERROR:" in result
-            # Should not contain control chars error since none were used
-            assert "shell control characters" not in result
+            with patch('subprocess.run') as mock_run:
+                mock_run.return_value = MagicMock(stdout="git output", stderr="", returncode=0)
+                result = bash_tool.execute("git status")
+                # git is approved, so it should execute
+                assert "blocked shell characters" not in result
+                assert "shell control characters" not in result.lower()
 
     def test_handles_quoted_args_with_semicolon(self, bash_tool):
         """Semicolons inside quotes should be handled correctly."""
@@ -279,7 +281,7 @@ class TestBashToolSecurity:
         """Commands with multiple control chars should all be rejected."""
         result = bash_tool.execute("ls && cat | wc > out")
         assert "[ERROR:" in result
-        assert "shell control characters" in result.lower()
+        assert "blocked shell characters" in result.lower()
 
     def test_rejects_command_with_newline(self, bash_tool):
         """Commands with newlines - handled based on content, not control chars."""

@@ -165,7 +165,9 @@ class HarnessController:
             print(f"\n[WARNING: Task reached maximum iterations ({max_iterations}). Stopping safety check.]")
             print("\n========================== Max Iterations Reached ====================================\n")
 
-        return response.text if not response.has_tool_calls else str(response.tool_calls)
+        # Return the response text if available, otherwise a placeholder
+        # Don't return str(tool_calls) as that's not human-readable
+        return response.text if response.text else "[Task completed but no text response received]"
 
     def remember(self, section: str, item: str) -> str:
         """Add an item to a memory section."""

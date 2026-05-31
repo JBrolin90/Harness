@@ -33,7 +33,7 @@ class WriteFileTool(BaseTool):
     """Create or overwrite a file with given content."""
 
     name = "write_file"
-    description = "Write content to a new file. Use this to create new files."
+    description = "Write content to a new file. Use this to create new files. Creates parent directories if needed."
     parameters = {
         "type": "object",
         "properties": {
@@ -52,6 +52,10 @@ class WriteFileTool(BaseTool):
     def execute(self, path: str, content: str) -> str:  # type: ignore[override]
         try:
             validated_path = _validate_path(path)
+            # Create parent directories if they don't exist
+            parent_dir = os.path.dirname(validated_path)
+            if parent_dir:
+                os.makedirs(parent_dir, exist_ok=True)
             with open(validated_path, 'w') as f:
                 f.write(content)
             return f"[SYSTEM OUTPUT: Successfully wrote {len(content)} characters to {validated_path}]"
