@@ -6,6 +6,8 @@ from provider import ProviderConfig
 from response import LLMResponse, ToolCall
 
 
+MAX_TOOL_CALLS = 50
+
 def _parse_tool_calls(message: dict) -> list[ToolCall]:
     """Extract tool calls from a message dict.
 
@@ -19,9 +21,10 @@ def _parse_tool_calls(message: dict) -> list[ToolCall]:
         message: A message dict that may contain tool_calls or function_call.
 
     Returns:
-        List of ToolCall objects.
+        List of ToolCall objects (capped at MAX_TOOL_CALLS).
     """
     parsed_calls = []
+    tool_call_count = 0
 
     # Handle top-level function_call (some providers use this)
     function_call = message.get('function_call')
@@ -62,6 +65,9 @@ def _parse_tool_calls(message: dict) -> list[ToolCall]:
                 arguments = {"_raw": arguments}
 
         parsed_calls.append(ToolCall(name=name, arguments=arguments))
+        tool_call_count += 1
+        if tool_call_count >= MAX_TOOL_CALLS:
+            break
 
     return parsed_calls
 
@@ -127,7 +133,6 @@ def _make_request_with_retry(url: str, headers: dict, payload: dict, max_retries
         Last exception if all retries exhausted
     """
     import time
-    import urllib.request
     
     retryable_statuses = {429, 500, 502, 503, 504}
     last_exception = None
@@ -168,12 +173,14 @@ def _make_request_with_retry(url: str, headers: dict, payload: dict, max_retries
             print(f"[BRAIN] Request timeout. Retrying in {wait_time}s ({attempt + 1}/{max_retries})...")
             time.sleep(wait_time)
             last_exception = e
-        except Exception as e:
+        except Exception:
             # Non-retryable exception, re-raise immediately
             raise
     
     # All retries exhausted
-    raise last_exception
+    if last_exception is not None:
+        raise last_exception
+    raise RuntimeError("Request failed: max retries reached without a specific exception")
 
 
 def call_llm(history: list, system_prompt: str, config: ProviderConfig) -> LLMResponse:
@@ -207,6 +214,10 @@ def call_llm(history: list, system_prompt: str, config: ProviderConfig) -> LLMRe
     if formatted_tools:
         payload["tools"] = formatted_tools
 
+    # Add tool_choice if specified (forces specific tool or requires a tool call)
+    if "tool_choice" in config.attributes:
+        payload["tool_choice"] = config.attributes["tool_choice"]
+
     try:
         response = _make_request_with_retry(config.url, headers=headers, payload=payload)
         data = response.json()
@@ -230,36 +241,48 @@ def call_llm(history: list, system_prompt: str, config: ProviderConfig) -> LLMRe
         return LLMResponse(error=f"[BRAIN ERROR: {e}]")
 
 
-def _handle_openai_style_response(data: dict) -> LLMResponse:
-    """Handle MiniMax/OpenAI/OpenRouter style responses."""
-    # Guard: check for presence and non-emptiness of choices
-    if 'choices' not in data:
-        return LLMResponse(error="[BRAIN ERROR: Missing 'choices' in response]")
-
-    choices = data['choices']
-    if not choices:
-        return LLMResponse(error="[BRAIN ERROR: Empty choices array]")
-
-    message = choices[0].get('message')
+def _handle_response(data: dict, message_key: str = "choices[0].message") -> LLMResponse:
+    """Handle responses with configurable message key extraction.
+    
+    Args:
+        data: Response dictionary from API.
+        message_key: Dot-notation path to the message object (e.g., "choices[0].message" or "message").
+    """
+    # Navigate to message using dot notation
+    parts = message_key.split(".")
+    message = data
+    for part in parts:
+        if isinstance(message, dict) and part in message:
+            message = message[part]
+        else:
+            return LLMResponse(error=f"[BRAIN ERROR: Missing '{message_key}' in response]")
+    
     if message is None:
-        return LLMResponse(error="[BRAIN ERROR: choices[0].message is None]")
-
+        return LLMResponse(error=f"[BRAIN ERROR: {message_key} is None]")
+    
+    tool_calls = _parse_tool_calls(message)
+    
+    # Validate finish_reason if available (check for truncation with tool calls)
+    finish_reason = None
+    if len(parts) >= 2 and parts[0] == "choices":
+        choice = data
+        for part in parts[:-1]:
+            choice = choice.get(part, {})
+        finish_reason = choice.get("finish_reason") if isinstance(choice, dict) else None
+        if tool_calls and finish_reason == "length":
+            print("[BRAIN WARNING: Response may be truncated - finish_reason is 'length' with tool_calls]")
+    
     return LLMResponse(
         text=_get_content(message),
-        tool_calls=_parse_tool_calls(message)
+        tool_calls=tool_calls
     )
+
+
+def _handle_openai_style_response(data: dict) -> LLMResponse:
+    """Handle MiniMax/OpenAI/OpenRouter style responses."""
+    return _handle_response(data, message_key="choices[0].message")
 
 
 def _handle_ollama_response(data: dict) -> LLMResponse:
     """Handle Ollama style responses."""
-    if 'message' not in data:
-        return LLMResponse(error="[BRAIN ERROR: Missing 'message' in Ollama response]")
-
-    message = data['message']
-    if message is None:
-        return LLMResponse(error="[BRAIN ERROR: message is None in Ollama response]")
-
-    return LLMResponse(
-        text=_get_content(message),
-        tool_calls=_parse_tool_calls(message)
-    )
+    return _handle_response(data, message_key="message")
