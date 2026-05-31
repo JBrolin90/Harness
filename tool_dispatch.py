@@ -162,7 +162,7 @@ def _parse_json_raw(text: str) -> dict | None:
 
 def parse_bash_command(text: str) -> dict | None:
     """Parse bash/sh code block into a bash tool call."""
-    m = re.search(r'```(?:bash|sh)?\s*\n?(.*?)\n?```', text.strip(), re.DOTALL)
+    m = re.search(r'```(?:bash|sh)\s*\n?(.*?)\n?```', text.strip(), re.DOTALL)
     if m:
         command = m.group(1).strip()
         if command:
@@ -253,6 +253,5 @@ def dispatch_iteration(responses: list[LLMResponse]) -> list[ToolResult | System
             break # Stop processing if a SystemError occurs
     return results
 
-# Backw
 # Backward compatibility alias
 tool_dispatch = dispatch
