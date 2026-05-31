@@ -252,3 +252,7 @@ def dispatch_iteration(responses: list[LLMResponse]) -> list[ToolResult | System
         if isinstance(res, SystemError):
             break # Stop processing if a SystemError occurs
     return results
+
+# Backw
+# Backward compatibility alias
+tool_dispatch = dispatch

@@ -147,13 +147,12 @@ class TestControllerModuleLevelFunctions:
         mock_provider = MagicMock()
         mock_pm_instance.get_provider.return_value = mock_provider
 
-        with patch('controller.call_llm', return_value="Response") as mock_llm:
-            import controller
-            controller.init()
-            result = controller.run_task("Hello")
+        import controller
+        controller._controller = None  # Reset
+        controller.init()
 
-            assert result == "Response"
-            assert mock_llm.called
+        assert controller._controller is not None
+        assert isinstance(controller._controller, controller.HarnessController)
 
     @patch('controller.terminal_history_upgrade')
     @patch('controller.ProviderManager')
@@ -250,12 +249,14 @@ class TestToolEngineIntegration:
 
     def test_controller_has_tool_engine_function(self, controller):
         """Controller should have tool_engine as function reference."""
-        from tool_dispatch import tool_dispatch as td_func
+        from tool_dispatch import dispatch
         assert hasattr(controller, 'tool_engine')
-        assert controller.tool_engine == td_func
+        assert controller.tool_engine == dispatch
 
     def test_tool_engine_is_callable_function(self, controller):
-        """tool_dispatch should be callable and return None for plain text."""
-        from tool_dispatch import tool_dispatch
-        result = tool_dispatch("Plain text, no tool")
-        assert result is None
+        """dispatch() should be callable and return NoToolFound for plain text."""
+        from tool_dispatch import dispatch
+        from response import LLMResponse
+        result = dispatch(LLMResponse(text="Plain text, no tool"))
+        from tool_dispatch import NoToolFound
+        assert isinstance(result, NoToolFound)

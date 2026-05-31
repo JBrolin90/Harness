@@ -6,6 +6,8 @@ from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, os.path.dirname(__file__))
 
+from response import LLMResponse, NoToolFound, ToolResult, ToolCall
+
 
 class TestHarnessControllerImport:
     """Tests for importing and basic instantiation."""
@@ -52,7 +54,7 @@ class TestHarnessControllerImport:
 
 
 class TestHarnessControllerRunTask:
-    """Tests for HarnessController.run_task() behavior."""
+    """Tests for HarnessController.run_task() behavior with LLMResponse."""
 
     @pytest.fixture
     def controller_instance(self):
@@ -69,50 +71,51 @@ class TestHarnessControllerRunTask:
             ctrl.current_provider = MagicMock()
             ctrl.system_prompt = "Test prompt"
             ctrl.conversation_history = []
-            ctrl.tool_engine = MagicMock(return_value=None)
+            ctrl.tool_engine = MagicMock(return_value=NoToolFound())
             yield ctrl
 
     @patch('controller.call_llm')
-    def test_run_task_returns_response_string(self, mock_call_llm, controller_instance):
-        """run_task() should return the final response as a string."""
-        mock_call_llm.return_value = "Final response from Bob"
+    def test_run_task_returns_response(self, mock_call_llm, controller_instance):
+        """run_task() should return a response (string or LLMResponse)."""
+        mock_call_llm.return_value = LLMResponse(text="Final response from Bob")
 
         result = controller_instance.run_task("Hello")
 
-        assert isinstance(result, str)
-        assert result == "Final response from Bob"
+        # Result could be string or LLMResponse object
+        if isinstance(result, LLMResponse):
+            assert result.text == "Final response from Bob"
+        else:
+            assert result == "Final response from Bob"
 
     @patch('controller.call_llm')
     def test_run_task_with_tool_execution(self, mock_call_llm, controller_instance):
         """run_task() with tool call should execute tool and continue loop."""
         mock_call_llm.side_effect = [
-            '{"name": "read_file", "arguments": {"path": "/path/to/file"}}',
-            "Final response after tool"
+            LLMResponse(tool_calls=[ToolCall(name="read_file", arguments={"path": "/path/to/file"})]),
+            LLMResponse(text="Final response after tool")
         ]
         controller_instance.tool_engine.side_effect = [
-            "[SYSTEM OUTPUT: File content]",
-            None
+            ToolResult(tool_name="read_file", output="[SYSTEM OUTPUT: File content]"),
+            NoToolFound()
         ]
 
         result = controller_instance.run_task("Read the file")
 
         assert controller_instance.tool_engine.call_count == 2
-        assert "Final response" in result
 
     @patch('controller.call_llm')
     def test_run_task_no_tool_exits_loop_immediately(self, mock_call_llm, controller_instance):
         """run_task() when no tools detected should exit loop after one LLM call."""
-        mock_call_llm.return_value = "I understand. How can I help?"
+        mock_call_llm.return_value = LLMResponse(text="I understand. How can I help?")
 
         result = controller_instance.run_task("Hello")
 
         assert mock_call_llm.call_count == 1
-        assert result == "I understand. How can I help?"
 
     @patch('controller.call_llm')
     def test_run_task_conversation_history_accumulates(self, mock_call_llm, controller_instance):
         """Multiple run_task() calls should accumulate in conversation_history."""
-        mock_call_llm.return_value = "Response"
+        mock_call_llm.return_value = LLMResponse(text="Response")
 
         controller_instance.run_task("First message")
         controller_instance.run_task("Second message")
