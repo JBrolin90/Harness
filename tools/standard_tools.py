@@ -97,7 +97,7 @@ class EditFileTool(BaseTool):
                 file_content = f.read()
 
             if search not in file_content:
-                return "[SYSTEM ERROR: Search text not found in file. Edit aborted.]"
+                return f"[SYSTEM ERROR: Search text not found in {path}. Ensure the 'search' string matches the file content exactly, including whitespace and indentation.]"
 
             new_content = file_content.replace(search, replace, 1)
 
