@@ -45,12 +45,53 @@ class ProviderManager:
             api_key_env_var="OLLAMA_DUMMY_KEY",
         ))
 
-    def add_provider(self, config: ProviderConfig):
-        """Add or update a provider configuration in memory."""
+    def add_provider(self, config: ProviderConfig, persist: bool = True):
+        """Add or update a provider configuration.
+        
+        Args:
+            config: Provider configuration to add/update
+            persist: If True, saves to disk. If False, only updates in-memory.
+                     Note: Default providers (cloud-pro, local-coder) are not
+                     persisted by default to avoid overwriting built-in configs.
+        """
         # Remove existing if name matches to allow updates
         self.providers = [p for p in self.providers if p.name != config.name]
         self.providers.append(config)
-        self.save_to_disk()
+        if persist:
+            self.save_to_disk()
+
+    def update_provider(self, name: str, **kwargs) -> bool:
+        """Update a provider's configuration in memory and persist if possible.
+        
+        Args:
+            name: Provider name to update
+            **kwargs: Fields to update (provider_type, url, model, api_key_env_var, attributes, tools)
+        
+        Returns:
+            True if provider was found and updated, False otherwise.
+        
+        Note:
+            Default providers (cloud-pro, local-coder) cannot be persisted via this method.
+            To persist changes to default providers, add a new provider with a different name
+            or manually edit providers.json.
+        """
+        for i, p in enumerate(self.providers):
+            if p.name == name:
+                # Update fields
+                for key, value in kwargs.items():
+                    if hasattr(p, key):
+                        setattr(p, key, value)
+                    else:
+                        print(f"[WARNING: Unknown provider field '{key}'")
+                
+                # Only persist if not a default provider
+                if name not in self.DEFAULT_PROVIDERS:
+                    self.save_to_disk()
+                else:
+                    print(f"[NOTE: Changes to default provider '{name}' are not persisted.]")
+                    print(f"       Use add_provider() with a custom name to persist changes.")
+                return True
+        return False
 
     def get_provider(self, name: str) -> ProviderConfig:
         """Retrieve a provider by its unique name."""

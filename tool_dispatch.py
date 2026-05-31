@@ -226,7 +226,8 @@ def dispatch(response: LLMResponse) -> ToolResult | SystemError | NoToolFound:
             if call:
                 return _execute_call(call["name"], call["arguments"])
         except Exception as e:
-            return SystemError(f"[DISPATCH PARSER '{parser_name}' ERROR: {e}]")
+            print(f"[DEBUG] Parser '{parser_name}' failed: {e}")
+            continue
 
     return NoToolFound()
 

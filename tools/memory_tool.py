@@ -14,7 +14,7 @@ class MemoryTool(BaseTool):
             "action": {
                 "type": "string",
                 "enum": ["add", "update", "delete"],
-                "description": "Action to perform: 'add' (append to section), 'update' (replace old item), 'delete' (remove item)."
+                "description": "Action to perform: 'add' (append item), 'update' (replace old item), 'delete' (remove item)."
             },
             "section": {
                 "type": "string",
@@ -22,14 +22,14 @@ class MemoryTool(BaseTool):
             },
             "item": {
                 "type": "string",
-                "description": "The item text to add or the new text (for update)."
+                "description": "The item text to add (for 'add') or the new text (for 'update'). Required for 'add' and 'update'; ignored for 'delete'."
             },
             "old_item": {
                 "type": "string",
-                "description": "The existing item to update or delete (required for 'update' and 'delete' actions)."
+                "description": "The existing item to update or delete. Required for 'update' and 'delete'; ignored for 'add'."
             }
         },
-        "required": ["action", "section", "item"]
+        "required": ["action", "section"]
     }
 
     def execute(self, action: str, section: str, item: str, old_item: str = "") -> str:  # type: ignore[override]

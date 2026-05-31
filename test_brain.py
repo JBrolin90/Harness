@@ -365,3 +365,89 @@ class TestCallLlm:
         payload = call_kwargs["json"]
         assert "tools" in payload
         assert payload["tools"][0]["function"]["name"] == "bash"
+
+
+class TestFormatToolsForProvider:
+    """Tests for _format_tools_for_provider tool formatting."""
+
+    def test_unwrapped_tools_get_wrapped_for_minimax(self):
+        """Unwrapped tools should be wrapped for MiniMax provider."""
+        from brain import _format_tools_for_provider
+        
+        raw_tools = [
+            {"name": "read_file", "description": "Read a file", "parameters": {}}
+        ]
+        formatted = _format_tools_for_provider(raw_tools, "minimax")
+        
+        assert formatted is not None
+        assert len(formatted) == 1
+        assert "type" in formatted[0]
+        assert formatted[0]["type"] == "function"
+        assert "function" in formatted[0]
+        assert formatted[0]["function"]["name"] == "read_file"
+
+    def test_pre_wrapped_tools_pass_through_for_minimax(self):
+        """Already wrapped tools should not be double-wrapped for MiniMax.
+        
+        This is the critical bug fix: controller wraps tools as
+        {"type": "function", "function": {...}}, and brain.py should
+        detect this and not wrap again (which caused Empty choices error).
+        """
+        from brain import _format_tools_for_provider
+        
+        pre_wrapped_tools = [
+            {"type": "function", "function": {"name": "read_file", "description": "Read a file", "parameters": {}}}
+        ]
+        formatted = _format_tools_for_provider(pre_wrapped_tools, "minimax")
+        
+        # Should NOT double-wrap
+        assert formatted is not None
+        assert len(formatted) == 1
+        assert "type" in formatted[0]
+        assert "function" in formatted[0]
+        # The function should be the raw tool, not wrapped again
+        assert "name" in formatted[0]["function"]
+        assert "description" in formatted[0]["function"]  # description is at function level, not tool level
+
+    def test_ollama_tools_pass_through_unwrapped(self):
+        """Ollama receives tools as-is (unwrapped)."""
+        from brain import _format_tools_for_provider
+        
+        raw_tools = [
+            {"name": "read_file", "description": "Read a file", "parameters": {}}
+        ]
+        formatted = _format_tools_for_provider(raw_tools, "ollama")
+        
+        assert formatted is not None
+        assert formatted == raw_tools
+
+    def test_openai_provider_uses_standard_format(self):
+        """OpenAI provider uses standard unwrapped format."""
+        from brain import _format_tools_for_provider
+        
+        raw_tools = [
+            {"name": "bash", "description": "Run command", "parameters": {}}
+        ]
+        formatted = _format_tools_for_provider(raw_tools, "openai")
+        
+        assert formatted is not None
+        assert formatted == raw_tools
+
+    def test_empty_tools_returns_none(self):
+        """Empty tools list returns None."""
+        from brain import _format_tools_for_provider
+        
+        assert _format_tools_for_provider([], "minimax") is None
+        assert _format_tools_for_provider(None, "minimax") is None
+
+    def test_openrouter_provider_uses_standard_format(self):
+        """OpenRouter provider uses standard format."""
+        from brain import _format_tools_for_provider
+        
+        raw_tools = [
+            {"name": "read_file", "description": "Read", "parameters": {}}
+        ]
+        formatted = _format_tools_for_provider(raw_tools, "openrouter")
+        
+        assert formatted is not None
+        assert formatted == raw_tools
