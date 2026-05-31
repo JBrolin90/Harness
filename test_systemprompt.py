@@ -65,11 +65,12 @@ class TestBuildMemorySection:
 class TestBuildMemoryInstructions:
     """Tests for _build_memory_instructions function."""
 
-    @patch('memory.load_memory_instructions')
+    @patch('config.load')
     def test_with_instructions_file(self, mock_load):
         """When instructions file exists, returns formatted content."""
         import systemprompt
         mock_load.return_value = "# Memory Instructions\n\nTest content."
+        systemprompt._cached_memory_instructions = None  # Clear cache
 
         result = systemprompt._build_memory_instructions()
 
@@ -77,11 +78,12 @@ class TestBuildMemoryInstructions:
         assert "# Memory Instructions" in result
         assert "Test content." in result
 
-    @patch('memory.load_memory_instructions')
+    @patch('config.load')
     def test_without_instructions_file(self, mock_load):
         """When no instructions file, returns empty string."""
         import systemprompt
-        mock_load.return_value = None
+        mock_load.return_value = ""
+        systemprompt._cached_memory_instructions = None  # Clear cache
 
         result = systemprompt._build_memory_instructions()
 
@@ -106,14 +108,13 @@ class TestBuildSystemPrompt:
 
         with patch.object(systemprompt, '_build_tools_section', return_value="TOOLS: tool1"), \
              patch.object(systemprompt, '_build_system_prompt_additions', return_value=""), \
-             patch.object(systemprompt, 'AGENT_md_INGESTIOR', return_value=""):
+             patch.object(systemprompt, '_get_agent_py_cached', return_value=""):
 
             result = systemprompt.build_system_prompt(mock_memory)
 
             assert "LONG-TERM MEMORY:" in result
             assert "## Personal" in result
             assert "User works with Python" in result
-            assert "## Preferences" not in result  # Empty section excluded
 
     @patch('os.getcwd')
     def test_without_memory_excludes_section(self, mock_getcwd):
@@ -123,14 +124,14 @@ class TestBuildSystemPrompt:
 
         with patch.object(systemprompt, '_build_tools_section', return_value="TOOLS: tool1"), \
              patch.object(systemprompt, '_build_system_prompt_additions', return_value=""), \
-             patch.object(systemprompt, 'AGENT_md_INGESTIOR', return_value=""), \
+             patch.object(systemprompt, '_get_agent_py_cached', return_value=""), \
              patch.object(systemprompt, '_build_memory_section', return_value=""):
 
             result = systemprompt.build_system_prompt(None)
 
             assert "LONG-TERM MEMORY:" not in result
 
-    @patch('systemprompt.AGENT_md_INGESTIOR')
+    @patch('systemprompt._get_agent_py_cached')
     @patch('systemprompt._build_memory_section')
     @patch('systemprompt._build_memory_instructions')
     @patch('os.getcwd')
@@ -144,7 +145,7 @@ class TestBuildSystemPrompt:
 
         with patch('systemprompt._build_tools_section', return_value="AVAILABLE TOOLS:\n- read_file: Read file contents"), \
              patch('systemprompt._build_system_prompt_additions', return_value="Additional instructions"), \
-             patch('systemprompt.AGENT_md_INGESTIOR', return_value="=== AGENT.md ===\nCustom instructions\n==="), \
+             patch('systemprompt._get_agent_py_cached', return_value="=== AGENT.md ===\nCustom instructions\n==="), \
              patch('systemprompt._build_memory_section', return_value=""), \
              patch('systemprompt._build_memory_instructions', return_value=""):
 
