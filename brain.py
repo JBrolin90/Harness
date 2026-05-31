@@ -78,19 +78,28 @@ def _format_tools_for_provider(tools: list, provider_type: str) -> list | None:
     
     - minimax: requires {"type": "function", "function": ...} wrapping
     - openai / openrouter: use standard tool format
-    - ollama: skip tools if provider doesn't support them
+    - ollama: pass as-is
     
+    Detects if tools are already wrapped (by controller) to avoid double-wrapping.
     Returns None if provider doesn't support tools.
     """
     if not tools:
         return None
     
+    # Check if tools are already wrapped (controller does this)
+    already_wrapped = any(
+        isinstance(t, dict) and "type" in t and "function" in t and isinstance(t.get("function"), dict)
+        for t in tools
+    )
+    
     if provider_type == "minimax":
         # MiniMax requires wrapping in type/function structure
+        if already_wrapped:
+            # Already wrapped by controller, pass through
+            return tools
         return [{"type": "function", "function": t} for t in tools]
     elif provider_type == "ollama":
         # Ollama supports native tool_calls in recent versions
-        # Return as-is, let the provider handle it
         return tools
     else:
         # OpenAI-compatible: use standard format

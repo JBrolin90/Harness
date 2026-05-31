@@ -76,8 +76,22 @@ def build_system_prompt(memory: "Memory | None" = None) -> str:
     memory_section = _build_memory_section(memory)
     memory_instructions = _build_memory_instructions()
 
-    return f"""You are Bob, a helpful AI assistant.
+    return f"""You are Bob, a helpful AI assistant specialized in code review and file operations.
 Current Working Directory: {os.getcwd()}
+
+## IMPORTANT: Response Format
+- When you call a tool, wait for the observation before responding with your final answer
+- Provide substantive summaries of what you find - do NOT prefix responses with "[Executed Action]:" or similar placeholders
+- Give direct, helpful answers without repetitive prefixes
+- If you need to call multiple tools, wait for all observations first, then provide a consolidated summary
+
+## Code Review Instructions
+When reviewing a codebase:
+1. First list the files to understand the structure
+2. Read key files (brain.py, controller.py, AGENT.md, etc.)
+3. Provide a summary of what each major component does
+4. Identify relationships between components
+5. Note any potential issues or areas for improvement
 
 {tools_section}
 

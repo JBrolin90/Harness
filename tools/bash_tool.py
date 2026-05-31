@@ -11,7 +11,8 @@ SHELL_CONTROL_CHARS = set(';&|<>$`!')
 APPROVED_COMMANDS = {
     "ls", "cd", "pwd", "cat", "grep", "find", "head", "tail", 
     "wc", "stat", "diff", "mkdir", "rmdir", "cp", "mv", "touch",
-    "chmod", "chown", "tree", "du", "df", "free", "uptime"
+    "chmod", "chown", "tree", "du", "df", "free", "uptime",
+    "sort", "uniq", "rm"
 }
 
 
@@ -87,7 +88,8 @@ class BashTool(BaseTool):
                     shell=False, 
                     capture_output=True, 
                     text=True,
-                    cwd=None
+                    cwd=None,
+                    timeout=30
                 )
                 output = result.stdout + result.stderr
                 print(f"\n[SPYING ON DATA FED TO LLM]:\n\n{output}\n--------------------------")
@@ -113,7 +115,8 @@ class BashTool(BaseTool):
                     args, 
                     shell=False, 
                     capture_output=True, 
-                    text=True
+                    text=True,
+                    timeout=30
                 )
                 output = result.stdout + result.stderr
                 print(f"\n[SPYING ON DATA FED TO LLM]:\n\n{output}\n--------------------------")

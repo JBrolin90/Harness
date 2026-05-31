@@ -74,6 +74,10 @@ class HarnessController:
 
         # Print and store assistant response (preserving thoughts)
         full_assistant_text = str(response.text or "")
+        # Clean up any "[Executed Action]:" prefixes from assistant text
+        if full_assistant_text.startswith("[Executed Action]:"):
+            full_assistant_text = full_assistant_text[len("[Executed Action]:"):].strip()
+        
         if response.has_tool_calls:
             tool_names = ", ".join(tc.name for tc in response.tool_calls)
             print(f"Bob: {full_assistant_text} [🔧 Calling: {tool_names}]")
@@ -81,8 +85,7 @@ class HarnessController:
             print(f"Bob: {full_assistant_text}")
         
         # Record assistant turn (ensure role sequence is preserved)
-        assistant_msg = f"[Executed Action]: {full_assistant_text}" if response.has_tool_calls else full_assistant_text
-        self.conversation_history.append({"role": "assistant", "content": str(assistant_msg)})
+        self.conversation_history.append({"role": "assistant", "content": str(full_assistant_text)})
 
         # The Autonomous Tool Loop - now using structured responses
         iteration = 0
@@ -147,10 +150,16 @@ class HarnessController:
                 print(f"Bob: {full_assistant_text}")
                 
             print(f"[Model: {self.current_provider.model}] {self._get_history_stats()} (iteration {iteration})")
+            # Clean up any "[Executed Action]:" prefixes
+            cleaned_text = full_assistant_text
+            if cleaned_text.startswith("[Executed Action]:"):
+                cleaned_text = cleaned_text[len("[Executed Action]:"):].strip()
+            
             # Always append assistant turn if text exists OR tool calls were made to preserve turn order
-            if full_assistant_text.strip() or response.has_tool_calls:
-                assistant_msg = f"[Executed Action]: {full_assistant_text}" if response.has_tool_calls else full_assistant_text
-                self.conversation_history.append({"role": "assistant", "content": str(assistant_msg)})
+            if cleaned_text.strip() or response.has_tool_calls:
+                # If text is empty but tool calls exist, ensure we send a valid assistant message
+                content = str(cleaned_text) if cleaned_text.strip() else "[Thinking...]"
+                self.conversation_history.append({"role": "assistant", "content": content})
             print(f"\n================================ End of iteration {iteration} ==========================================\n")
         else:
             print(f"\n[WARNING: Task reached maximum iterations ({max_iterations}). Stopping safety check.]")
