@@ -36,8 +36,8 @@ class ToolResult:
     is_error: bool = False
 
     def __bool__(self) -> bool:
-        """Return True for successful execution (truthy for loop continuation)."""
-        return True
+        """Return True for successful execution, False if error (for loop continuation)."""
+        return not self.is_error
 
     def __str__(self) -> str:
         """Return just the output string for convenience."""

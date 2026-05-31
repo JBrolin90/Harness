@@ -9,21 +9,47 @@ from response import LLMResponse, ToolCall
 def _parse_tool_calls(message: dict) -> list[ToolCall]:
     """Extract tool calls from a message dict.
 
-    Handles both OpenAI and Ollama tool_call formats where arguments
-    might be a dict, string, or JSON string.
+    Handles multiple tool call formats:
+    - OpenAI style: message.tool_calls[i].function.name/arguments
+    - Top-level function_call: message.function_call.name/arguments
+    - Ollama style: message.tool_calls[i].function.name
+    - Alternative field names: function_call.name, function.name
 
     Args:
-        message: A message dict that may contain tool_calls.
+        message: A message dict that may contain tool_calls or function_call.
 
     Returns:
         List of ToolCall objects.
     """
-    tool_calls_data = message.get('tool_calls') or []
     parsed_calls = []
 
+    # Handle top-level function_call (some providers use this)
+    function_call = message.get('function_call')
+    if function_call:
+        name = function_call.get('name', '')
+        if name:
+            arguments = function_call.get('arguments', '{}')
+            if isinstance(arguments, str):
+                try:
+                    arguments = json.loads(arguments)
+                except json.JSONDecodeError:
+                    arguments = {"_raw": arguments}
+            parsed_calls.append(ToolCall(name=name, arguments=arguments))
+        return parsed_calls
+
+    # Handle tool_calls array (OpenAI / OpenRouter / MiniMax)
+    tool_calls_data = message.get('tool_calls') or []
+
     for call in tool_calls_data:
+        # Try OpenAI style: call.function.name
         fn = call.get('function', {})
         name = fn.get('name')
+        
+        # Fallback: try function_call.name directly
+        if not name and 'function_call' in call:
+            fc = call.get('function_call', {})
+            name = fc.get('name') or fc.get('function', {}).get('name')
+        
         if not name:
             continue
 
@@ -45,6 +71,30 @@ def _get_content(message: dict | None) -> str:
     if message is None:
         return ""
     return message.get('content', "") or ""
+
+
+def _format_tools_for_provider(tools: list, provider_type: str) -> list | None:
+    """Format tools according to provider requirements.
+    
+    - minimax: requires {"type": "function", "function": ...} wrapping
+    - openai / openrouter: use standard tool format
+    - ollama: skip tools if provider doesn't support them
+    
+    Returns None if provider doesn't support tools.
+    """
+    if not tools:
+        return None
+    
+    if provider_type == "minimax":
+        # MiniMax requires wrapping in type/function structure
+        return [{"type": "function", "function": t} for t in tools]
+    elif provider_type == "ollama":
+        # Ollama supports native tool_calls in recent versions
+        # Return as-is, let the provider handle it
+        return tools
+    else:
+        # OpenAI-compatible: use standard format
+        return tools
 
 
 def call_llm(history: list, system_prompt: str, config: ProviderConfig) -> LLMResponse:
@@ -73,9 +123,10 @@ def call_llm(history: list, system_prompt: str, config: ProviderConfig) -> LLMRe
     if "response_format" in config.attributes:
         payload["response_format"] = config.attributes["response_format"]
 
-    # Only attach tools for providers that actually support function calling
-    if config.tools:
-        payload["tools"] = config.tools
+    # Only attach tools for providers that support function calling
+    formatted_tools = _format_tools_for_provider(config.tools, config.provider_type)
+    if formatted_tools:
+        payload["tools"] = formatted_tools
 
     try:
         response = requests.post(config.url, headers=headers, json=payload, timeout=(5, 180))
