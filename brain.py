@@ -252,7 +252,15 @@ def _handle_response(data: dict, message_key: str = "choices[0].message") -> LLM
     parts = message_key.split(".")
     message = data
     for part in parts:
-        if isinstance(message, dict) and part in message:
+        # Handle list indexing like choices[0]
+        if "[" in part and part.endswith("]"):
+            key, idx_str = part.split("[")
+            idx = int(idx_str.rstrip("]"))
+            if isinstance(message, dict) and key in message and isinstance(message[key], list) and len(message[key]) > idx:
+                message = message[key][idx]
+            else:
+                return LLMResponse(error=f"[BRAIN ERROR: Missing '{message_key}' in response]")
+        elif isinstance(message, dict) and part in message:
             message = message[part]
         else:
             return LLMResponse(error=f"[BRAIN ERROR: Missing '{message_key}' in response]")
@@ -264,10 +272,8 @@ def _handle_response(data: dict, message_key: str = "choices[0].message") -> LLM
     
     # Validate finish_reason if available (check for truncation with tool calls)
     finish_reason = None
-    if len(parts) >= 2 and parts[0] == "choices":
-        choice = data
-        for part in parts[:-1]:
-            choice = choice.get(part, {})
+    if "choices" in data and isinstance(data["choices"], list) and len(data["choices"]) > 0:
+        choice = data["choices"][0]
         finish_reason = choice.get("finish_reason") if isinstance(choice, dict) else None
         if tool_calls and finish_reason == "length":
             print("[BRAIN WARNING: Response may be truncated - finish_reason is 'length' with tool_calls]")

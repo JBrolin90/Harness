@@ -68,6 +68,11 @@ def _parse_xml_tool_call(text: str) -> dict | None:
 
     keys = re.findall(r'<arg_key>\s*(\w+)\s*</arg_key>', content)
     values = re.findall(r'<arg_value>\s*(.*?)\s*</arg_value>', content, re.DOTALL)
+    
+    # Guard against mismatched key/value counts (Issue #6)
+    if len(keys) != len(values):
+        return None  # Invalid format, don't produce malformed arguments
+    
     arguments = dict(zip(keys, [v.strip() for v in values]))
 
     return {"name": tool_name, "arguments": arguments}
@@ -235,7 +240,12 @@ def dispatch(response: LLMResponse) -> ToolResult | SystemError | NoToolFound:
 def _execute_call(tool_name: str, arguments: dict) -> ToolResult | SystemError:
     """Internal helper to execute a tool and wrap the result."""
     print(f"\n[🔧 Harness executing: {tool_name}]")
-    output = _safe_dispatch(tool_name, arguments)
+    try:
+        output = _safe_dispatch(tool_name, arguments)
+    except TypeError as e:
+        # Invalid arguments for this tool - return as SystemError rather than letting
+        # exception bubble up and be misattributed to parser failure
+        return SystemError(f"[SYSTEM ERROR: Invalid arguments for '{tool_name}': {e}]")
 
     if output.startswith("[SYSTEM ERROR"):
         return SystemError(output)
@@ -243,15 +253,21 @@ def _execute_call(tool_name: str, arguments: dict) -> ToolResult | SystemError:
     return ToolResult(tool_name, output)
 
 
-def dispatch_iteration(responses: list[LLMResponse]) -> list[ToolResult | SystemError]:
-    """Process a list of responses (multi-choice) and execute tools."""
+def dispatch_iteration(responses: list[LLMResponse]) -> list[ToolResult | SystemError | NoToolFound]:
+    """Process a list of responses (multi-choice) and execute tools.
+    
+    Returns:
+        List of results matching input responses length. Each element is:
+          ToolResult   - tool executed successfully
+          SystemError  - system-level error (loop stops after this)
+          NoToolFound  - no tool call found in this response
+    """
     results = []
     for resp in responses:
         res = dispatch(resp)
-        if isinstance(res, (ToolResult, SystemError)):
-            results.append(res)
+        results.append(res)
         if isinstance(res, SystemError):
-            break # Stop processing if a SystemError occurs
+            break  # Stop processing if a SystemError occurs
     return results
 
 # Backward compatibility alias

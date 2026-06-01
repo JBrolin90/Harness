@@ -16,7 +16,7 @@ APPROVED_COMMANDS = {
     "ls", "cd", "pwd", "cat", "grep", "find", "head", "tail", 
     "wc", "stat", "diff", "mkdir", "rmdir", "cp", "mv", "touch",
     "chmod", "chown", "tree", "du", "df", "free", "uptime",
-    "sort", "uniq", "rm", "echo", "mkdir", "git"
+    "sort", "uniq", "rm", "echo", "git"
 }
 
 
