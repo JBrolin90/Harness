@@ -1,0 +1,123 @@
+[
+    {
+        "name": "cloud-pro",
+        "notes": "Built-in: MiniMax-M2.7 cloud model. Works well with structured tool_calls.",
+        "attributes": {
+            "enable_small_model_guidance": false
+        }
+    },
+    {
+        "name": "local-coder",
+        "notes": "Built-in: qwen2.5-coder:7b ollama model. Does NOT use structured tool_calls - needs text parsing.",
+        "attributes": {
+            "enable_small_model_guidance": false,
+            "text_parse_json_codeblock": true,
+            "text_parse_json_raw": true
+        }
+    },
+    {
+        "name": "gemma4-4b-ollama",
+        "notes": "Works with structured tool_calls correctly. No text parsing needed.",
+        "attributes": {
+            "enable_small_model_guidance": false
+        }
+    },
+    {
+        "name": "Qwen2.5-coder-14b",
+        "notes": "Does NOT use structured tool_calls. Puts JSON in text format. Needs text parsing.",
+        "attributes": {
+            "enable_small_model_guidance": false,
+            "text_parse_json_codeblock": true,
+            "text_parse_json_raw": true
+        }
+    },
+    {
+        "name": "qwen2.5-coder-7b-instruct-q8",
+        "notes": "Likely similar to other qwen2.5-coder models. May need text parsing.",
+        "attributes": {
+            "enable_small_model_guidance": false,
+            "text_parse_json_codeblock": true,
+            "text_parse_json_raw": true
+        }
+    },
+    {
+        "name": "qwen2.5-coder-3b",
+        "notes": "Smaller model. Likely needs text parsing like other qwen2.5-coder variants.",
+        "attributes": {
+            "enable_small_model_guidance": true,
+            "text_parse_json_codeblock": true,
+            "text_parse_json_raw": true
+        }
+    },
+    {
+        "name": "qwen2.5-coder-1.5b",
+        "notes": "Smallest qwen2.5-coder variant. Likely needs text parsing and small model guidance.",
+        "attributes": {
+            "enable_small_model_guidance": true,
+            "text_parse_json_codeblock": true,
+            "text_parse_json_raw": true,
+            "text_parse_bash": true
+        }
+    },
+    {
+        "name": "deepseek-free",
+        "notes": "OpenRouter model. Works with structured tool_calls.",
+        "attributes": {
+            "enable_small_model_guidance": false
+        }
+    },
+    {
+        "name": "deepseek-coder-6.7b",
+        "notes": "Ollama model. May need text parsing - untested.",
+        "attributes": {
+            "enable_small_model_guidance": true,
+            "text_parse_json_codeblock": true
+        }
+    },
+    {
+        "name": "llama3.2",
+        "notes": "Ollama model. No tool use detected in testing - may need text parsing.",
+        "attributes": {
+            "enable_small_model_guidance": true,
+            "text_parse_json_codeblock": true,
+            "text_parse_json_raw": true
+        }
+    },
+    {
+        "name": "llama3.1-8b",
+        "notes": "Ollama model. No tool use detected in testing - may need text parsing.",
+        "attributes": {
+            "enable_small_model_guidance": true,
+            "text_parse_json_codeblock": true,
+            "text_parse_json_raw": true
+        }
+    },
+    {
+        "name": "Poolside-laguna-free",
+        "notes": "OpenRouter model. Unknown structured tool call support.",
+        "attributes": {
+            "enable_small_model_guidance": false
+        }
+    },
+    {
+        "name": "Gemm4-26b-free",
+        "notes": "OpenRouter model. Has response_format json_object set.",
+        "attributes": {
+            "enable_small_model_guidance": false
+        }
+    },
+    {
+        "name": "qwen3-next-80b",
+        "notes": "OpenRouter model. Had rate limit issues in testing.",
+        "attributes": {
+            "enable_small_model_guidance": false
+        }
+    },
+    {
+        "name": "nomic-embed-text",
+        "notes": "Embedding model - not suitable for tool calling or code review.",
+        "attributes": {
+            "enable_small_model_guidance": false
+        }
+    }
+]

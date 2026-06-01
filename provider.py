@@ -30,20 +30,46 @@ class ProviderManager:
 
     def _load_defaults(self):
         """Built-in provider configurations (not saved to disk)."""
+        # Load recommendations from provider-recommendations.json
+        recommendations = self._load_recommendations()
+
+        # cloud-pro - MiniMax-M2.7 cloud model
+        cloud_pro_attrs = recommendations.get("cloud-pro", {}).get("attributes", {})
         self.providers.append(ProviderConfig(
             name="cloud-pro",
             provider_type="minimax",
             url="https://api.minimax.io/v1/text/chatcompletion_v2",
             model="MiniMax-M2.7",
             api_key_env_var="MINIMAX_API_KEY",
+            attributes=cloud_pro_attrs,
         ))
+
+        # local-coder - qwen2.5-coder:7b ollama model
+        local_coder_attrs = recommendations.get("local-coder", {}).get("attributes", {})
         self.providers.append(ProviderConfig(
             name="local-coder",
             provider_type="ollama",
             url="http://localhost:11434/api/chat",
             model="qwen2.5-coder:7b",
             api_key_env_var="OLLAMA_DUMMY_KEY",
+            attributes=local_coder_attrs,
         ))
+
+    def _load_recommendations(self) -> dict:
+        """Load provider recommendations from provider-recommendations.json.
+        
+        Returns:
+            Dict mapping provider name -> {notes, attributes}
+        """
+        recommendations_path = "provider-recommendations.json"
+        if os.path.exists(recommendations_path):
+            try:
+                with open(recommendations_path, "r") as f:
+                    data = json.load(f)
+                    return {item["name"]: item for item in data}
+            except Exception as e:
+                print(f"[PROVIDER RECOMMENDATIONS WARNING: {e}]")
+        return {}
 
     def add_provider(self, config: ProviderConfig, persist: bool = True):
         """Add or update a provider configuration.

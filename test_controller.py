@@ -255,9 +255,11 @@ class TestToolEngineIntegration:
 
     def test_controller_has_tool_engine_function(self, controller):
         """Controller should have tool_engine as function reference."""
-        from tool_dispatch import dispatch
+        from tool_dispatch import dispatch, dispatch_with_text_parsing
         assert hasattr(controller, 'tool_engine')
-        assert controller.tool_engine == dispatch
+        # tool_engine can be either dispatch or dispatch_with_text_parsing
+        # depending on provider attributes (text parsing flags)
+        assert controller.tool_engine in (dispatch, dispatch_with_text_parsing)
 
     def test_tool_engine_is_callable_function(self, controller):
         """dispatch() should be callable and return NoToolFound for plain text."""

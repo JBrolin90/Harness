@@ -19,10 +19,20 @@ class HarnessController:
 
         self.current_provider = ProviderManager().get_provider(provider_name)
         set_current_provider(self.current_provider)
-        # For now, use dispatch() for all providers (cloud and local)
-        # This means ONLY structured native tool_calls are executed - no text parsing
-        # This allows testing whether models properly support structured tool calling
-        self.tool_engine = dispatch
+        
+        # Check if provider has any text parsing enabled in attributes
+        # Use dispatch_with_text_parsing() if text parsing flags are set,
+        # otherwise use dispatch() for structured tool_calls only
+        attrs = self.current_provider.attributes or {}
+        has_text_parsing = any(
+            attrs.get(f"text_parse_{fmt}") 
+            for fmt in ["json_codeblock", "json_raw", "bash", "xml", "colon_xml", "plain_xml"]
+        )
+        
+        if has_text_parsing:
+            self.tool_engine = dispatch_with_text_parsing
+        else:
+            self.tool_engine = dispatch
         self.system_prompt = ""
         self._cached_system_prompt: str = ""
         self._last_memory_content: str = ""
@@ -33,7 +43,11 @@ class HarnessController:
 
     def _preload_system_prompt(self):
         """Pre-load system prompt at startup to cache AGENT.py and memory_instructions.md."""
-        self.system_prompt = build_system_prompt(self.memory)
+        self.system_prompt = build_system_prompt(
+            self.memory,
+            provider_type=self.current_provider.provider_type,
+            attributes=self.current_provider.attributes
+        )
         self._cached_system_prompt = self.system_prompt
         self._last_memory_content = str(self.memory.get_all())
         print("[Config preloaded]")
@@ -43,7 +57,11 @@ class HarnessController:
         current_memory = str(self.memory.get_all())
         if current_memory != self._last_memory_content:
             # Memory changed, rebuild system prompt
-            self._cached_system_prompt = build_system_prompt(self.memory)
+            self._cached_system_prompt = build_system_prompt(
+                self.memory,
+                provider_type=self.current_provider.provider_type,
+                attributes=self.current_provider.attributes
+            )
             self._last_memory_content = current_memory
         return self._cached_system_prompt
 

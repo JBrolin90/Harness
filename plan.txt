@@ -78,3 +78,17 @@ Default (all false): only structured native `tool_calls` are executed.
 
 This allows fine-grained control over which text formats to interpret as tool calls,
 without forcing all text parsing on or off for a given provider.
+
+### Provider Recommendations File
+
+Created `provider-recommendations.json` with recommended attributes for each provider:
+
+- **Cloud models** (MiniMax, OpenRouter): `enable_small_model_guidance: false`
+- **Ollama models that work with structured tool_calls** (gemma4): no text parsing needed
+- **Ollama models that don't use structured tool_calls** (qwen2.5-coder variants): 
+  enable `text_parse_json_codeblock` and `text_parse_json_raw`
+- **Smaller models** (qwen2.5-coder:3b, qwen2.5-coder:1.5b): 
+  enable `enable_small_model_guidance: true` for extra guidance
+
+This file provides baseline recommendations that can be applied via `update_provider()`
+or by manually merging into `providers.json`.
