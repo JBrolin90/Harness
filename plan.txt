@@ -46,3 +46,35 @@ with message: `[SYSTEM ERROR: Multiple tool calls detected (N). Tools: tool1, to
 
 This is a safeguard - only the first tool call is executed. If multiple tool calls are needed,
 a new execution round must be initiated by the user or controller.
+
+### Structured vs Text-Based Tool Calling
+
+**Current Behavior:**
+- `dispatch()` is used for ALL providers (cloud and local) - only structured native `tool_calls` are executed
+- Text responses (including JSON in ```json ``` blocks, ```bash blocks, etc.) are NOT parsed as commands
+- This cleanly reveals which models properly support structured tool calling
+
+**Test Results:**
+- **gemma4:e4b (ollama)**: ✅ Uses structured `tool_calls` correctly
+- **qwen2.5-coder:14b (ollama)**: ❌ Puts JSON in text format, not structured tool_calls
+- **MiniMax-M2.7 (cloud)**: ✅ Uses structured `tool_calls` correctly
+
+**Future Enhancement:**
+Create granular text-parsing flags in provider config to enable specific text-based parsing:
+
+```python
+# Example provider config attributes
+attributes: {
+    "text_parse_json_codeblock": true,   # Parse ```json ... ``` 
+    "text_parse_json_raw": true,          # Parse bare {...} JSON
+    "text_parse_bash": true,              # Parse ```bash ... ```
+    "text_parse_xml": true,               # Parse <tool>...</tool>
+    "text_parse_colon_xml": true,         # Parse <tool>:{...}</tool>
+}
+```
+
+Each flag is additive - models can have any combination enabled.
+Default (all false): only structured native `tool_calls` are executed.
+
+This allows fine-grained control over which text formats to interpret as tool calls,
+without forcing all text parsing on or off for a given provider.

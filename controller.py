@@ -19,12 +19,10 @@ class HarnessController:
 
         self.current_provider = ProviderManager().get_provider(provider_name)
         set_current_provider(self.current_provider)
-        # Use text parsing dispatch for smaller models (ollama) that may not use structured tool calls
-        # Large cloud models (MiniMax, OpenAI) should use structured tool calls only
-        if self.current_provider.provider_type == "ollama":
-            self.tool_engine = dispatch_with_text_parsing
-        else:
-            self.tool_engine = dispatch
+        # For now, use dispatch() for all providers (cloud and local)
+        # This means ONLY structured native tool_calls are executed - no text parsing
+        # This allows testing whether models properly support structured tool calling
+        self.tool_engine = dispatch
         self.system_prompt = ""
         self._cached_system_prompt: str = ""
         self._last_memory_content: str = ""
