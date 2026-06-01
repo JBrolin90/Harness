@@ -30,27 +30,94 @@ class ProviderManager:
 
     def _load_defaults(self):
         """Built-in provider configurations (not saved to disk)."""
+        # Load recommendations from provider-recommendations.json
+        recommendations = self._load_recommendations()
+
+        # cloud-pro - MiniMax-M2.7 cloud model
+        cloud_pro_attrs = recommendations.get("cloud-pro", {}).get("attributes", {})
         self.providers.append(ProviderConfig(
             name="cloud-pro",
             provider_type="minimax",
             url="https://api.minimax.io/v1/text/chatcompletion_v2",
             model="MiniMax-M2.7",
             api_key_env_var="MINIMAX_API_KEY",
+            attributes=cloud_pro_attrs,
         ))
+
+        # local-coder - qwen2.5-coder:7b ollama model
+        local_coder_attrs = recommendations.get("local-coder", {}).get("attributes", {})
         self.providers.append(ProviderConfig(
             name="local-coder",
             provider_type="ollama",
             url="http://localhost:11434/api/chat",
             model="qwen2.5-coder:7b",
             api_key_env_var="OLLAMA_DUMMY_KEY",
+            attributes=local_coder_attrs,
         ))
 
-    def add_provider(self, config: ProviderConfig):
-        """Add or update a provider configuration in memory."""
+    def _load_recommendations(self) -> dict:
+        """Load provider recommendations from provider-recommendations.json.
+        
+        Returns:
+            Dict mapping provider name -> {notes, attributes}
+        """
+        recommendations_path = "provider-recommendations.json"
+        if os.path.exists(recommendations_path):
+            try:
+                with open(recommendations_path, "r") as f:
+                    data = json.load(f)
+                    return {item["name"]: item for item in data}
+            except Exception as e:
+                print(f"[PROVIDER RECOMMENDATIONS WARNING: {e}]")
+        return {}
+
+    def add_provider(self, config: ProviderConfig, persist: bool = True):
+        """Add or update a provider configuration.
+        
+        Args:
+            config: Provider configuration to add/update
+            persist: If True, saves to disk. If False, only updates in-memory.
+                     Note: Default providers (cloud-pro, local-coder) are not
+                     persisted by default to avoid overwriting built-in configs.
+        """
         # Remove existing if name matches to allow updates
         self.providers = [p for p in self.providers if p.name != config.name]
         self.providers.append(config)
-        self.save_to_disk()
+        if persist:
+            self.save_to_disk()
+
+    def update_provider(self, name: str, **kwargs) -> bool:
+        """Update a provider's configuration in memory and persist if possible.
+        
+        Args:
+            name: Provider name to update
+            **kwargs: Fields to update (provider_type, url, model, api_key_env_var, attributes, tools)
+        
+        Returns:
+            True if provider was found and updated, False otherwise.
+        
+        Note:
+            Default providers (cloud-pro, local-coder) cannot be persisted via this method.
+            To persist changes to default providers, add a new provider with a different name
+            or manually edit providers.json.
+        """
+        for i, p in enumerate(self.providers):
+            if p.name == name:
+                # Update fields
+                for key, value in kwargs.items():
+                    if hasattr(p, key):
+                        setattr(p, key, value)
+                    else:
+                        print(f"[WARNING: Unknown provider field '{key}'")
+                
+                # Only persist if not a default provider
+                if name not in self.DEFAULT_PROVIDERS:
+                    self.save_to_disk()
+                else:
+                    print(f"[NOTE: Changes to default provider '{name}' are not persisted.]")
+                    print(f"       Use add_provider() with a custom name to persist changes.")
+                return True
+        return False
 
     def get_provider(self, name: str) -> ProviderConfig:
         """Retrieve a provider by its unique name."""

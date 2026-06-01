@@ -19,6 +19,8 @@ This is required for `cloud-pro` (MiniMax-M2.7) to work with tool calling.
 - [x] Implement native function calling support (structured LLMResponse)
 - [x] Add LLM compatibility test script (test_llm_compatibility.py)
 - [x] Test all 11 providers with tool calling prompts
+- [x] Fix _execute_call to catch TypeError, KeyError, ValueError, and general Exception
+- [x] Add _check_multi_tool_call to detect multiple tool calls and return SystemError requiring user confirmation
 
 ## Provider Status Summary
 
@@ -35,3 +37,58 @@ This is required for `cloud-pro` (MiniMax-M2.7) to work with tool calling.
 | deepseek-coder-6.7b | 🔴 Error | Does not support tools |
 | qwen3-next-80b | 🔴 Error | Rate limited |
 | Gemm4-26b-free | 🔴 Error | Rate limited |
+
+## Known Issues
+
+### Multiple Tool Calls
+When a model returns multiple tool calls in a single response, the system will return a SystemError
+with message: `[SYSTEM ERROR: Multiple tool calls detected (N). Tools: tool1, tool2, ... User confirmation required to proceed.]`
+
+This is a safeguard - only the first tool call is executed. If multiple tool calls are needed,
+a new execution round must be initiated by the user or controller.
+
+### Structured vs Text-Based Tool Calling
+
+**Current Behavior:**
+- `dispatch()` is used for ALL providers (cloud and local) - only structured native `tool_calls` are executed
+- Text responses (including JSON in ```json ``` blocks, ```bash blocks, etc.) are NOT parsed as commands
+- This cleanly reveals which models properly support structured tool calling
+
+**Test Results:**
+- **gemma4:e4b (ollama)**: ✅ Uses structured `tool_calls` correctly
+- **qwen2.5-coder:14b (ollama)**: ❌ Puts JSON in text format, not structured tool_calls
+- **MiniMax-M2.7 (cloud)**: ✅ Uses structured `tool_calls` correctly
+
+**Future Enhancement:**
+Create granular text-parsing flags in provider config to enable specific text-based parsing:
+
+```python
+# Example provider config attributes
+attributes: {
+    "text_parse_json_codeblock": true,   # Parse ```json ... ``` 
+    "text_parse_json_raw": true,          # Parse bare {...} JSON
+    "text_parse_bash": true,              # Parse ```bash ... ```
+    "text_parse_xml": true,               # Parse <tool>...</tool>
+    "text_parse_colon_xml": true,         # Parse <tool>:{...}</tool>
+}
+```
+
+Each flag is additive - models can have any combination enabled.
+Default (all false): only structured native `tool_calls` are executed.
+
+This allows fine-grained control over which text formats to interpret as tool calls,
+without forcing all text parsing on or off for a given provider.
+
+### Provider Recommendations File
+
+Created `provider-recommendations.json` with recommended attributes for each provider:
+
+- **Cloud models** (MiniMax, OpenRouter): `enable_small_model_guidance: false`
+- **Ollama models that work with structured tool_calls** (gemma4): no text parsing needed
+- **Ollama models that don't use structured tool_calls** (qwen2.5-coder variants): 
+  enable `text_parse_json_codeblock` and `text_parse_json_raw`
+- **Smaller models** (qwen2.5-coder:3b, qwen2.5-coder:1.5b): 
+  enable `enable_small_model_guidance: true` for extra guidance
+
+This file provides baseline recommendations that can be applied via `update_provider()`
+or by manually merging into `providers.json`.

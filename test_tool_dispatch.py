@@ -3,6 +3,7 @@ import pytest
 from unittest.mock import patch
 from tool_dispatch import (
     dispatch,
+    dispatch_with_text_parsing,
     _safe_dispatch,
     _normalize_arguments,
     parse_bash_command,
@@ -115,6 +116,88 @@ class TestParseBashCommand:
         assert parse_bash_command("No code here") is None
 
 
+class TestStreamingIncompleteOutput:
+    """Tests for handling incomplete/partial streaming output that may trigger spurious bash commands."""
+
+    def test_incomplete_bash_block_no_closing_fence(self):
+        """Incomplete bash block without closing ``` should not execute."""
+        _mock_tool("bash", "[OK]")
+        try:
+            # Simulates streaming: model output got cut off mid-generation
+            response = LLMResponse(text='```bash\nls -la')
+            r = dispatch(response)
+            # Should NOT execute - no closing fence, parse_bash_command returns None
+            # The response should fall through to NoToolFound or be handled safely
+            assert not isinstance(r, ToolResult) or r.tool_name != "bash"
+        finally:
+            _clear("bash")
+
+    def test_empty_content_after_bash_fence(self):
+        """Empty content after ```bash marker should not produce a command."""
+        response = LLMResponse(text='```bash\n```')
+        r = dispatch(response)
+        # parse_bash_command returns None for empty block
+        assert isinstance(r, NoToolFound)
+
+    def test_plain_ellipsis_not_bash(self):
+        """Plain '...' text should not be interpreted as a bash command."""
+        _mock_tool("bash", "[OK]")
+        try:
+            response = LLMResponse(text="...")
+            r = dispatch(response)
+            # '...' alone has no code fences, so parse_bash_command returns None
+            # Should fall through to NoToolFound, not execute bash
+            assert isinstance(r, NoToolFound)
+        finally:
+            _clear("bash")
+
+    def test_ellipsis_in_text_not_bash(self):
+        """'...' embedded in regular text should not trigger bash."""
+        _mock_tool("bash", "[OK]")
+        try:
+            response = LLMResponse(text="Running command...")
+            r = dispatch(response)
+            # No code fences, so no bash parsing
+            assert isinstance(r, NoToolFound)
+        finally:
+            _clear("bash")
+
+    def test_partial_bash_block_with_random_content(self):
+        """Random content between bash fences with text parsing should execute.
+        
+        This test uses dispatch_with_text_parsing() since dispatch() no longer
+        parses text for cloud models.
+        """
+        _mock_tool("bash", "[OK]")
+        try:
+            response = LLMResponse(text='```bash\nrandom stuff here\n```')
+            r = dispatch_with_text_parsing(response)
+            # With text parsing enabled, this executes bash
+            assert isinstance(r, ToolResult)
+            assert r.tool_name == "bash"
+            assert r.output == "[OK]"
+        finally:
+            _clear("bash")
+
+    def test_malformed_tool_call_xml_not_bash(self):
+        """Malformed XML that looks like tool call should not become bash."""
+        _mock_tool("bash", "[OK]")
+        try:
+            # Various malformed patterns that should NOT result in bash execution
+            malformed_inputs = [
+                '<tool_call>bash',  # incomplete
+                '<tool_call>...</tool_call>',  # ellipsis inside
+                '```bash\n...\n',  # partial
+            ]
+            for text in malformed_inputs:
+                r = dispatch(LLMResponse(text=text))
+                # None of these should result in bash ToolResult
+                if isinstance(r, ToolResult):
+                    assert r.tool_name != "bash", f"'{text}' should not parse as bash"
+        finally:
+            _clear("bash")
+
+
 class TestDispatch:
     """Integration tests for the full dispatch function with LLMResponse."""
 
@@ -152,33 +235,33 @@ class TestDispatch:
         assert "Unknown tool" in str(r)
 
     def test_json_in_content(self):
-        """JSON in text content is parsed and executed."""
+        """JSON in text content is parsed and executed with text parsing enabled."""
         _mock_tool("bash", "[OK]")
         try:
             response = LLMResponse(text='{"name": "bash", "arguments": {"command": "pwd"}}')
-            r = dispatch(response)
+            r = dispatch_with_text_parsing(response)
             assert isinstance(r, ToolResult)
             assert r.tool_name == "bash"
         finally:
             _clear("bash")
 
     def test_json_codeblock_in_content(self):
-        """JSON code block in text content is parsed and executed."""
+        """JSON code block in text content is parsed and executed with text parsing."""
         _mock_tool("bash", "[OK]")
         try:
             response = LLMResponse(text='```json\n{"name": "bash", "arguments": {"command": "ls"}}\n```')
-            r = dispatch(response)
+            r = dispatch_with_text_parsing(response)
             assert isinstance(r, ToolResult)
             assert r.tool_name == "bash"
         finally:
             _clear("bash")
 
     def test_bash_codeblock_in_content(self):
-        """Bash code block in text content is executed as bash tool."""
+        """Bash code block in text content is executed with text parsing enabled."""
         _mock_tool("bash", "[OK]")
         try:
             response = LLMResponse(text='```bash\nls -la\n```')
-            r = dispatch(response)
+            r = dispatch_with_text_parsing(response)
             assert isinstance(r, ToolResult)
             assert r.tool_name == "bash"
         finally:

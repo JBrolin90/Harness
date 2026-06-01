@@ -194,13 +194,22 @@ _default_memory: Optional[Memory] = None
 
 
 def get_memory(path: Union[str, Path, None] = None) -> Memory:
-    """Get or create the default memory instance.
+    """Get or create a Memory instance.
+    
+    CAUTION: This function caches a single default Memory instance globally.
+    Calling get_memory(path=None) after get_memory(some_path) will return
+    the cached instance, not a new one for the default path.
+    
+    To get a fresh Memory instance with a different path, either:
+    1. Pass path on every call to use it consistently
+    2. Create Memory instances directly: Memory(path)
     
     Args:
-        path: Optional path to memory.md
+        path: Optional path to memory.md. If None and no cached instance
+              exists, uses memory.md in cwd.
         
     Returns:
-        Memory instance
+        Memory instance (cached after first call)
     """
     global _default_memory
     if _default_memory is None or path is not None:

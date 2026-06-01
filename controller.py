@@ -1,6 +1,7 @@
 """Agent controller with instance-based state for modularity and testability."""
+import json
 from brain import call_llm
-from tool_dispatch import dispatch, extract_json_string, parse_bash_command
+from tool_dispatch import dispatch, dispatch_with_text_parsing, extract_json_string, parse_bash_command
 from terminal_history import terminal_history_upgrade
 from provider import ProviderManager
 from systemprompt import build_system_prompt
@@ -18,7 +19,20 @@ class HarnessController:
 
         self.current_provider = ProviderManager().get_provider(provider_name)
         set_current_provider(self.current_provider)
-        self.tool_engine = dispatch
+        
+        # Check if provider has any text parsing enabled in attributes
+        # Use dispatch_with_text_parsing() if text parsing flags are set,
+        # otherwise use dispatch() for structured tool_calls only
+        attrs = self.current_provider.attributes or {}
+        has_text_parsing = any(
+            attrs.get(f"text_parse_{fmt}") 
+            for fmt in ["json_codeblock", "json_raw", "bash", "xml", "colon_xml", "plain_xml"]
+        )
+        
+        if has_text_parsing:
+            self.tool_engine = dispatch_with_text_parsing
+        else:
+            self.tool_engine = dispatch
         self.system_prompt = ""
         self._cached_system_prompt: str = ""
         self._last_memory_content: str = ""
@@ -29,7 +43,11 @@ class HarnessController:
 
     def _preload_system_prompt(self):
         """Pre-load system prompt at startup to cache AGENT.py and memory_instructions.md."""
-        self.system_prompt = build_system_prompt(self.memory)
+        self.system_prompt = build_system_prompt(
+            self.memory,
+            provider_type=self.current_provider.provider_type,
+            attributes=self.current_provider.attributes
+        )
         self._cached_system_prompt = self.system_prompt
         self._last_memory_content = str(self.memory.get_all())
         print("[Config preloaded]")
@@ -39,7 +57,11 @@ class HarnessController:
         current_memory = str(self.memory.get_all())
         if current_memory != self._last_memory_content:
             # Memory changed, rebuild system prompt
-            self._cached_system_prompt = build_system_prompt(self.memory)
+            self._cached_system_prompt = build_system_prompt(
+                self.memory,
+                provider_type=self.current_provider.provider_type,
+                attributes=self.current_provider.attributes
+            )
             self._last_memory_content = current_memory
         return self._cached_system_prompt
 
@@ -70,19 +92,22 @@ class HarnessController:
         response: LLMResponse = call_llm(
             self.conversation_history, self.system_prompt, self.current_provider
         )
-        print(f"[Model response type: {'tool_call' if response.has_tool_calls else 'text'}]")
 
-        # Print and store assistant response (preserving thoughts)
-        full_assistant_text = str(response.text or "")
+        # Print and store assistant response
+        full_assistant_text = self._clean_assistant_text(response.text)
+
         if response.has_tool_calls:
             tool_names = ", ".join(tc.name for tc in response.tool_calls)
             print(f"Bob: {full_assistant_text} [🔧 Calling: {tool_names}]")
         else:
             print(f"Bob: {full_assistant_text}")
-        
+
         # Record assistant turn (ensure role sequence is preserved)
-        assistant_msg = f"[Executed Action]: {full_assistant_text}" if response.has_tool_calls else full_assistant_text
-        self.conversation_history.append({"role": "assistant", "content": str(assistant_msg)})
+        # If text is empty but tool calls exist, ensure we send a valid assistant message
+        hist_content = full_assistant_text if full_assistant_text.strip() or not response.has_tool_calls else "[Thinking...]"
+        self.conversation_history.append({"role": "assistant", "content": hist_content})
+
+        print(f"[Model response type: {'tool_call' if response.has_tool_calls else 'text'}]")
 
         # The Autonomous Tool Loop - now using structured responses
         iteration = 0
@@ -92,7 +117,8 @@ class HarnessController:
             # Calculate action signature (valid tool or raw block) for loop detection
             current_tc = response.first_tool_call
             if current_tc:
-                current_action_sig = f"{current_tc.name}({current_tc.arguments})"
+                # Sort arguments to ensure deterministic signature even if key order changes
+                current_action_sig = f"{current_tc.name}({json.dumps(current_tc.arguments, sort_keys=True)})"
             else:
                 # Extract raw blocks even if parsing failed, to detect repetitive invalid attempts
                 raw_json = extract_json_string(full_assistant_text)
@@ -137,26 +163,36 @@ class HarnessController:
             response = call_llm(
                 self.conversation_history, self.system_prompt, self.current_provider
             )
-            print(f"[Model response type: {'tool_call' if response.has_tool_calls else 'text'}]")
-            
-            full_assistant_text = str(response.text or "")
+
+            full_assistant_text = self._clean_assistant_text(response.text)
             if response.has_tool_calls:
                 tool_names = ", ".join(tc.name for tc in response.tool_calls)
                 print(f"Bob: {full_assistant_text} [🔧 Calling: {tool_names}]")
             else:
                 print(f"Bob: {full_assistant_text}")
-                
-            print(f"[Model: {self.current_provider.model}] {self._get_history_stats()} (iteration {iteration})")
+
+            print(f"[Model: {self.current_provider.model}] {self._get_history_stats()} (iteration {iteration + 1})")
+
             # Always append assistant turn if text exists OR tool calls were made to preserve turn order
             if full_assistant_text.strip() or response.has_tool_calls:
-                assistant_msg = f"[Executed Action]: {full_assistant_text}" if response.has_tool_calls else full_assistant_text
-                self.conversation_history.append({"role": "assistant", "content": str(assistant_msg)})
-            print(f"\n================================ End of iteration {iteration} ==========================================\n")
+                # If text is empty but tool calls exist, ensure we send a valid assistant message
+                content = full_assistant_text if full_assistant_text.strip() else "[Thinking...]"
+                self.conversation_history.append({"role": "assistant", "content": content})
+            print(f"\n================================ End of iteration {iteration + 1} ==========================================\n")
         else:
             print(f"\n[WARNING: Task reached maximum iterations ({max_iterations}). Stopping safety check.]")
             print("\n========================== Max Iterations Reached ====================================\n")
 
-        return response.text if not response.has_tool_calls else str(response.tool_calls)
+        # Return the response text if available, otherwise a placeholder
+        # Don't return str(tool_calls) as that's not human-readable
+        return response.text if response.text else "[Task completed but no text response received]"
+
+    def _clean_assistant_text(self, text: str | None) -> str:
+        """Standardize cleaning of assistant response text."""
+        content = str(text or "")
+        if content.startswith("[Executed Action]:"):
+            content = content[len("[Executed Action]:"):].strip()
+        return content
 
     def remember(self, section: str, item: str) -> str:
         """Add an item to a memory section."""

@@ -107,7 +107,11 @@
         "url": "http://localhost:11434/api/chat",
         "model": "qwen2.5-coder:3b",
         "api_key_env_var": "OLLAMA_DUMMY_KEY",
-        "attributes": {},
+        "attributes": {
+                "enable_small_model_guidance": true,
+                "text_parse_json_codeblock": true,
+                "text_parse_json_raw": true
+            },
         "tools": []
     },
     {
