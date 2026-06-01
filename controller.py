@@ -1,7 +1,7 @@
 """Agent controller with instance-based state for modularity and testability."""
 import json
 from brain import call_llm
-from tool_dispatch import dispatch, extract_json_string, parse_bash_command
+from tool_dispatch import dispatch, dispatch_with_text_parsing, extract_json_string, parse_bash_command
 from terminal_history import terminal_history_upgrade
 from provider import ProviderManager
 from systemprompt import build_system_prompt
@@ -19,7 +19,12 @@ class HarnessController:
 
         self.current_provider = ProviderManager().get_provider(provider_name)
         set_current_provider(self.current_provider)
-        self.tool_engine = dispatch
+        # Use text parsing dispatch for smaller models (ollama) that may not use structured tool calls
+        # Large cloud models (MiniMax, OpenAI) should use structured tool calls only
+        if self.current_provider.provider_type == "ollama":
+            self.tool_engine = dispatch_with_text_parsing
+        else:
+            self.tool_engine = dispatch
         self.system_prompt = ""
         self._cached_system_prompt: str = ""
         self._last_memory_content: str = ""

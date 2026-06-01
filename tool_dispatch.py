@@ -91,7 +91,7 @@ def _parse_colon_json_format(text: str) -> dict | None:
     if not inner:
         return {"name": tool_name, "arguments": {}}
 
-    inner = re.sub(r'^:?\s*', '', inner).rstrip('/').strip()
+    inner = re.sub(r'^:?\s*', '', inner).strip()
     if not inner:
         return {"name": tool_name, "arguments": {}}
 
@@ -129,15 +129,9 @@ def _parse_plain_tool_call(text: str) -> dict | None:
     if tool_name in {"get_model_name", "list_loaded_tools"}:
         return {"name": tool_name, "arguments": {}}
 
-    arg_map: dict[str, str] = {
-        "read_file": "path",
-        "write_file": "path",
-        "edit_file": "path",
-        "list_files": "path",
-        "bash": "command",
-    }
-    arg_name = arg_map.get(tool_name, "path")
-    return {"name": tool_name, "arguments": {arg_name: inner}}
+    # Use first argument value as single argument (e.g., <bash>ls -la</bash>)
+    # Parameter name will be normalized by _safe_dispatch → _normalize_arguments
+    return {"name": tool_name, "arguments": {"content": inner}}
 
 
 def extract_json_string(text: str) -> dict | None:
@@ -190,11 +184,60 @@ def _parse_simple_tool_json(text: str) -> dict | None:
 
 
 # ---------------------------------------------------------------------------
-# Dispatch pipeline
-# ---------------------------------------------------------------------------
+# Text-based parsers (for smaller models that may not use structured tool calls)
+# These parsers interpret text output as potential tool calls - use with caution
+#
+# Parser precedence rationale (in order):
+#   1. json-codeblock  - Fenced JSON (```json ...```). Most specific format, highest confidence.
+#   2. json-raw        - Bare JSON object ({...}). Common for structured tool calls.
+#   3. simple-json     - Alternative JSON format ({"tool": ..., "args": {...}}).
+#   4. bash-block      - Bash/sh code block (```bash ...```). Common in model outputs.
+#                        Placed high because smaller models may use markdown for commands.
+#   5. tool_call-xml   - Explicit XML format (<tool_call>...<arg_key>...<arg_value>...</tool_call>).
+#                        More verbose but unambiguous - placed before colon-xml.
+#   6. colon-xml       - Colon format (<tool>:{...}). Shorthand that can overlap with other formats.
+#   7. plain-xml       - Simple XML tag (<tool>value</tool>). Fallback for basic cases.
+#
+# Note: JSON parsers (1-3) are NOT redundant - codeblock vs raw are distinct formats.
+# The ordering is arbitrary but functional for smaller models that use text-based tool calls.
+_TEXT_PARSERS = [
+    ("json-codeblock", extract_json_string),
+    ("json-raw", _parse_json_raw),
+    ("simple-json", _parse_simple_tool_json),
+    ("bash-block", parse_bash_command),
+    ("tool_call-xml", _parse_xml_tool_call),  # More explicit, checked before colon-xml
+    ("colon-xml", _parse_colon_json_format),
+    ("plain-xml", _parse_plain_tool_call),
+]
+
+
+def _check_multi_tool_call(response: LLMResponse) -> SystemError | None:
+    """Check for multiple tool calls and return SystemError if found.
+    
+    Multiple tool calls require user confirmation before execution.
+    
+    Returns:
+        SystemError if multiple tool calls detected, None otherwise.
+    """
+    if len(response.tool_calls) > 1:
+        tool_names = [tc.name for tc in response.tool_calls]
+        return SystemError(
+            f"[SYSTEM ERROR: Multiple tool calls detected ({len(response.tool_calls)}). "
+            f"Tools: {', '.join(tool_names)}. "
+            f"User confirmation required to proceed.]"
+        )
+    return None
+
 
 def dispatch(response: LLMResponse) -> ToolResult | SystemError | NoToolFound:
     """Parse response for tool call and execute it.
+
+    For large/cloud models (MiniMax, OpenAI, etc.) that use structured tool calls.
+    This function ONLY handles native tool_calls from the model response.
+    Text responses are NOT parsed as commands.
+
+    For smaller models that may output tool calls in text format, use
+    dispatch_with_text_parsing() instead.
 
     Returns:
       ToolResult  - tool executed successfully (truthy, loop continues)
@@ -203,6 +246,44 @@ def dispatch(response: LLMResponse) -> ToolResult | SystemError | NoToolFound:
     """
     if response.error:
         return SystemError(response.error)
+
+    # Check for multiple tool calls (requires confirmation)
+    multi_error = _check_multi_tool_call(response)
+    if multi_error:
+        return multi_error
+
+    # Native tool calls only - structured tool calls from the model
+    if response.has_tool_calls:
+        tc = response.first_tool_call
+        if tc:
+            return _execute_call(tc.name, tc.arguments)
+
+    # No text parsing - large models should use structured tool calls
+    return NoToolFound()
+
+
+def dispatch_with_text_parsing(response: LLMResponse) -> ToolResult | SystemError | NoToolFound:
+    """Parse response for tool call using both native tool_calls AND text parsers.
+
+    For smaller models that may not consistently use structured tool calls and
+    instead output tool calls in text format (e.g., <bash>ls</bash> or ```bash ls```).
+
+    WARNING: This interprets any text that looks like a tool call as a command
+    to execute. Only use with models that you trust to not output markdown code
+    blocks that could be misinterpreted as commands.
+
+    Returns:
+      ToolResult  - tool executed successfully (truthy, loop continues)
+      SystemError - system-level error (falsy, loop stops)
+      NoToolFound - no tool call found (falsy, loop stops)
+    """
+    if response.error:
+        return SystemError(response.error)
+
+    # Check for multiple tool calls (requires confirmation)
+    multi_error = _check_multi_tool_call(response)
+    if multi_error:
+        return multi_error
 
     # 1. Native tool calls
     if response.has_tool_calls:
@@ -214,20 +295,9 @@ def dispatch(response: LLMResponse) -> ToolResult | SystemError | NoToolFound:
     if not response.text:
         return NoToolFound()
 
-    parsers = [
-        ("json-codeblock", extract_json_string),
-        ("json-raw", _parse_json_raw),
-        ("simple-json", _parse_simple_tool_json),
-        ("bash-block", parse_bash_command),
-        ("colon-xml", _parse_colon_json_format),
-        ("tool_call-xml", _parse_xml_tool_call),
-        ("plain-xml", _parse_plain_tool_call),
-    ]
-
-    text = response.text
-    for parser_name, parser in parsers:
+    for parser_name, parser in _TEXT_PARSERS:
         try:
-            call = parser(text)
+            call = parser(response.text)
             if call:
                 return _execute_call(call["name"], call["arguments"])
         except Exception as e:
@@ -242,10 +312,12 @@ def _execute_call(tool_name: str, arguments: dict) -> ToolResult | SystemError:
     print(f"\n[🔧 Harness executing: {tool_name}]")
     try:
         output = _safe_dispatch(tool_name, arguments)
-    except TypeError as e:
-        # Invalid arguments for this tool - return as SystemError rather than letting
-        # exception bubble up and be misattributed to parser failure
+    except (TypeError, KeyError, ValueError) as e:
+        # Catch TypeError (invalid arguments), KeyError (missing fields), ValueError (invalid values)
         return SystemError(f"[SYSTEM ERROR: Invalid arguments for '{tool_name}': {e}]")
+    except Exception as e:
+        # Catch any other unexpected exceptions to prevent crashes
+        return SystemError(f"[SYSTEM ERROR: Unexpected error in '{tool_name}': {e}]")
 
     if output.startswith("[SYSTEM ERROR"):
         return SystemError(output)

@@ -19,6 +19,8 @@ This is required for `cloud-pro` (MiniMax-M2.7) to work with tool calling.
 - [x] Implement native function calling support (structured LLMResponse)
 - [x] Add LLM compatibility test script (test_llm_compatibility.py)
 - [x] Test all 11 providers with tool calling prompts
+- [x] Fix _execute_call to catch TypeError, KeyError, ValueError, and general Exception
+- [x] Add _check_multi_tool_call to detect multiple tool calls and return SystemError requiring user confirmation
 
 ## Provider Status Summary
 
@@ -35,3 +37,12 @@ This is required for `cloud-pro` (MiniMax-M2.7) to work with tool calling.
 | deepseek-coder-6.7b | 🔴 Error | Does not support tools |
 | qwen3-next-80b | 🔴 Error | Rate limited |
 | Gemm4-26b-free | 🔴 Error | Rate limited |
+
+## Known Issues
+
+### Multiple Tool Calls
+When a model returns multiple tool calls in a single response, the system will return a SystemError
+with message: `[SYSTEM ERROR: Multiple tool calls detected (N). Tools: tool1, tool2, ... User confirmation required to proceed.]`
+
+This is a safeguard - only the first tool call is executed. If multiple tool calls are needed,
+a new execution round must be initiated by the user or controller.
