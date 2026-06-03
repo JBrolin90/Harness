@@ -3,7 +3,6 @@ from conversation import ConversationManager
 from iteration_handler import IterationHandler
 from tool_manager import ToolManager
 from systemprompt import SystemPromptManager
-from terminal_history import terminal_history_upgrade
 from provider import ProviderManager
 from tools.core_config import set_current_provider
 from memory import get_memory
@@ -13,8 +12,6 @@ class HarnessController:
     """Agent controller with instance-based state for modularity and testability."""
 
     def __init__(self, provider_name: str = "cloud-pro", memory_path: str | None = None):
-        terminal_history_upgrade()
-        
         # Provider
         self.current_provider = ProviderManager().get_provider(provider_name)
         set_current_provider(self.current_provider)

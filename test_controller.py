@@ -10,10 +10,9 @@ sys.path.insert(0, os.path.dirname(__file__))
 class TestHarnessControllerInit:
     """Tests for HarnessController.__init__()"""
 
-    @patch('controller.terminal_history_upgrade')
     @patch('controller.ProviderManager')
     @patch('controller.get_memory')
-    def test_init_creates_instance_state(self, mock_get_memory, mock_pm_class, mock_terminal):
+    def test_init_creates_instance_state(self, mock_get_memory, mock_pm_class):
         """__init__() should create instance attributes."""
         mock_pm_instance = MagicMock()
         mock_pm_class.return_value = mock_pm_instance
@@ -33,10 +32,9 @@ class TestHarnessControllerInit:
         assert ctrl.current_provider == mock_provider
         assert hasattr(ctrl.conversation_manager, 'history')
 
-    @patch('controller.terminal_history_upgrade')
     @patch('controller.ProviderManager')
     @patch('controller.get_memory')
-    def test_reset_clears_history(self, mock_get_memory, mock_pm_class, mock_terminal):
+    def test_reset_clears_history(self, mock_get_memory, mock_pm_class):
         """reset() should clear conversation history."""
         mock_pm_instance = MagicMock()
         mock_pm_class.return_value = mock_pm_instance
@@ -60,7 +58,7 @@ class TestHarnessControllerRunTask:
     @pytest.fixture
     def controller_instance(self):
         """Create a mocked controller instance for testing."""
-        with patch('controller.terminal_history_upgrade'), \
+        with \
              patch('controller.ProviderManager') as mock_pm_class, \
              patch('controller.get_memory') as mock_get_memory:
             mock_pm_instance = MagicMock()
@@ -133,7 +131,7 @@ class TestToolEngineIntegration:
 
     @pytest.fixture
     def controller(self):
-        with patch('controller.terminal_history_upgrade'), \
+        with \
              patch('controller.ProviderManager') as mock_pm_class, \
              patch('controller.get_memory') as mock_get_memory:
             mock_pm_instance = MagicMock()

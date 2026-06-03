@@ -12,10 +12,9 @@ from response import LLMResponse, NoToolFound, ToolResult, ToolCall
 class TestHarnessControllerImport:
     """Tests for importing and basic instantiation."""
 
-    @patch('controller.terminal_history_upgrade')
     @patch('controller.ProviderManager')
     @patch('controller.get_memory')
-    def test_harness_controller_class_exists(self, mock_get_memory, mock_pm_class, mock_terminal):
+    def test_harness_controller_class_exists(self, mock_get_memory, mock_pm_class):
         """HarnessController class should be accessible from controller module."""
         mock_pm_instance = MagicMock()
         mock_pm_class.return_value = mock_pm_instance
@@ -26,10 +25,9 @@ class TestHarnessControllerImport:
         from controller import HarnessController
         assert HarnessController is not None
 
-    @patch('controller.terminal_history_upgrade')
     @patch('controller.ProviderManager')
     @patch('controller.get_memory')
-    def test_harness_controller_default_provider(self, mock_get_memory, mock_pm_class, mock_terminal):
+    def test_harness_controller_default_provider(self, mock_get_memory, mock_pm_class):
         """HarnessController() should default to cloud-pro provider."""
         mock_pm_instance = MagicMock()
         mock_pm_class.return_value = mock_pm_instance
@@ -45,10 +43,9 @@ class TestHarnessControllerImport:
         mock_pm_instance.get_provider.assert_called_with("cloud-pro")
         assert ctrl.current_provider.name == "cloud-pro"
 
-    @patch('controller.terminal_history_upgrade')
     @patch('controller.ProviderManager')
     @patch('controller.get_memory')
-    def test_harness_controller_named_provider(self, mock_get_memory, mock_pm_class, mock_terminal):
+    def test_harness_controller_named_provider(self, mock_get_memory, mock_pm_class):
         """HarnessController('local-coder') should use specified provider."""
         mock_pm_instance = MagicMock()
         mock_pm_class.return_value = mock_pm_instance
@@ -70,7 +67,7 @@ class TestHarnessControllerRunTask:
     @pytest.fixture
     def controller_instance(self):
         """Create a mocked controller instance."""
-        with patch('controller.terminal_history_upgrade'), \
+        with \
              patch('controller.ProviderManager') as mock_pm_class, \
              patch('controller.get_memory') as mock_get_memory:
             mock_pm_instance = MagicMock()
@@ -134,7 +131,7 @@ class TestControllerReset:
 
     @pytest.fixture
     def controller_instance(self):
-        with patch('controller.terminal_history_upgrade'), \
+        with \
              patch('controller.ProviderManager') as mock_pm_class, \
              patch('controller.get_memory') as mock_get_memory:
             mock_pm_instance = MagicMock()

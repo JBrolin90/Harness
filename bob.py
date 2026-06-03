@@ -1,9 +1,12 @@
 import argparse
 from controller import HarnessController
+from terminal_history import terminal_history_upgrade
 
 VERSION = "0.3.0"
 
 def main():
+    terminal_history_upgrade()
+    
     parser = argparse.ArgumentParser(description="Bob-Harness CLI")
     parser.add_argument(
         "--provider",
