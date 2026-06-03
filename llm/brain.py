@@ -4,7 +4,7 @@ import requests
 
 from .provider import ProviderConfig, ProviderType
 from .request_builder import RequestBuilder
-from .tool_call_parser import get_parser, parse_arguments, TopLevelFunctionCallParser, OpenAIStyleParser, OllamaParser, MultiFormatParser
+from .tool_call_parser import get_parser, TopLevelFunctionCallParser, MultiFormatParser
 from .retry_handler import RetryHandler
 from .response import LLMResponse, ToolCall
 
@@ -19,7 +19,8 @@ def _make_error_response(message: str) -> LLMResponse:
     return LLMResponse(error=f"{ERROR_PREFIX}{message}{ERROR_SUFFIX}")
 
 
-MAX_TOOL_CALLS = 50
+# Tool call limits to prevent runaway responses
+MAX_TOOL_CALLS: int = 50
 
 
 def _parse_tool_calls(message: dict) -> list[ToolCall]:
@@ -33,7 +34,7 @@ def _format_tools_for_provider(tools: list, provider_type: ProviderType | str) -
     # Normalize to ProviderType enum
     pt = provider_type if isinstance(provider_type, ProviderType) else ProviderType.from_string(provider_type)
     config = type('Config', (), {'provider_type': pt, 'tools': tools})()
-    builder = RequestBuilder(config)
+    builder = RequestBuilder(config)  # type: ignore - anonymous class for backward compatibility
     return builder._format_tools_for_provider(tools)
 
 
@@ -144,11 +145,11 @@ def _extract_message_at_path(data: dict, message_key: str, provider_type: str) -
     )
 
 
-def _handle_openai_response(data: dict, provider_type: str = "openai") -> LLMResponse:
+def _handle_openai_response(data: dict, provider_type: ProviderType | str = "openai") -> LLMResponse:
     """Handle MiniMax/OpenAI/OpenRouter style responses (OpenAI-compatible)."""
     return _extract_message_at_path(data, message_key="choices[0].message", provider_type=provider_type)
 
 
-def _handle_ollama_response(data: dict, provider_type: str = "ollama") -> LLMResponse:
+def _handle_ollama_response(data: dict, provider_type: ProviderType | str = "ollama") -> LLMResponse:
     """Handle Ollama style responses."""
     return _extract_message_at_path(data, message_key="message", provider_type=provider_type)
