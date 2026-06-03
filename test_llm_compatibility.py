@@ -12,8 +12,8 @@ from typing import Optional
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from provider import ProviderManager, ProviderConfig
-from brain import call_llm
+from llm.provider import ProviderManager, ProviderConfig
+from llm.brain import consult_llm as call_llm
 from systemprompt import build_system_prompt
 from tools import TOOLS
 

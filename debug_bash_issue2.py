@@ -5,7 +5,7 @@ Investigate if brain.py could be producing tool_calls with name="..." or similar
 import sys
 sys.path.insert(0, '/home/joachim/lab/prj/Harness')
 
-from response import LLMResponse, ToolCall
+from llm.response import LLMResponse, ToolCall
 from tool_dispatch import dispatch
 
 # Clear and set up a mock bash tool

@@ -2,8 +2,8 @@
 import json
 import os
 import requests
-from provider import ProviderConfig
-from response import LLMResponse, ToolCall
+from .provider import ProviderConfig
+from .response import LLMResponse, ToolCall
 
 
 MAX_TOOL_CALLS = 50
@@ -72,8 +72,8 @@ def _parse_tool_calls(message: dict) -> list[ToolCall]:
     return parsed_calls
 
 
-def _get_content(message: dict | None) -> str:
-    """Safely extract content from a message dict."""
+def _extract_text_content(message: dict | None) -> str:
+    """Safely extract text content from a message dict."""
     if message is None:
         return ""
     return message.get('content', "") or ""
@@ -186,15 +186,15 @@ def _make_request_with_retry(url: str, headers: dict, payload: dict, max_retries
 def consult_llm(history: list, system_prompt: str, config: ProviderConfig) -> LLMResponse:
     """Unified LLM request handler using a ProviderConfig object."""
     # Resolve API key from environment variable if specified
-    resolved_api_key = os.environ.get(config.api_key_env_var, "") if config.api_key_env_var else ""
-    if not resolved_api_key and config.provider_type != "ollama":
+    env_api_key = os.environ.get(config.api_key_env_var, "") if config.api_key_env_var else ""
+    if not env_api_key and config.provider_type != "ollama":
         print(f"[WARNING: API key for {config.name} not found in environment variable '{config.api_key_env_var}']")
 
     headers = {"Content-Type": "application/json"}
     
     # Only attach Authorization header if a key was resolved
-    if resolved_api_key:
-        headers["Authorization"] = f"Bearer {resolved_api_key}"
+    if env_api_key:
+        headers["Authorization"] = f"Bearer {env_api_key}"
 
     messages = [{"role": "system", "content": system_prompt}]
     messages += history
@@ -226,7 +226,7 @@ def consult_llm(history: list, system_prompt: str, config: ProviderConfig) -> LL
         if config.provider_type == "ollama":
             return _handle_ollama_response(data)
         else:
-            return _handle_openai_style_response(data)
+            return _handle_openai_response(data)
 
     except requests.HTTPError as e:
         status = e.response.status_code if e.response is not None else "unknown"
@@ -241,8 +241,8 @@ def consult_llm(history: list, system_prompt: str, config: ProviderConfig) -> LL
         return LLMResponse(error=f"[BRAIN ERROR: {e}]")
 
 
-def _handle_response(data: dict, message_key: str = "choices[0].message") -> LLMResponse:
-    """Handle responses with configurable message key extraction.
+def _extract_message_at_path(data: dict, message_key: str = "choices[0].message") -> LLMResponse:
+    """Navigate to message using dot-notation path and extract content + tool_calls.
     
     Args:
         data: Response dictionary from API.
@@ -279,16 +279,16 @@ def _handle_response(data: dict, message_key: str = "choices[0].message") -> LLM
             print("[BRAIN WARNING: Response may be truncated - finish_reason is 'length' with tool_calls]")
     
     return LLMResponse(
-        text=_get_content(message),
+        text=_extract_text_content(message),
         tool_calls=tool_calls
     )
 
 
-def _handle_openai_style_response(data: dict) -> LLMResponse:
-    """Handle MiniMax/OpenAI/OpenRouter style responses."""
-    return _handle_response(data, message_key="choices[0].message")
+def _handle_openai_response(data: dict) -> LLMResponse:
+    """Handle MiniMax/OpenAI/OpenRouter style responses (OpenAI-compatible)."""
+    return _extract_message_at_path(data, message_key="choices[0].message")
 
 
 def _handle_ollama_response(data: dict) -> LLMResponse:
     """Handle Ollama style responses."""
-    return _handle_response(data, message_key="message")
+    return _extract_message_at_path(data, message_key="message")

@@ -9,7 +9,7 @@ dispatch_with_text_parsing() can be used instead.
 """
 import pytest
 from tool_dispatch import dispatch, dispatch_with_text_parsing, parse_bash_command
-from response import LLMResponse, ToolCall, ToolResult, NoToolFound
+from llm.response import LLMResponse, ToolCall, ToolResult, NoToolFound
 from tools.base_tool import BaseTool
 
 

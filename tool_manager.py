@@ -2,7 +2,7 @@
 from tools.base_tool import BaseTool
 from tool_dispatch import dispatch, dispatch_with_text_parsing
 from task.execute_tools import ExecuteTools
-from response import LLMResponse, ToolResult, SystemError, NoToolFound
+from llm.response import LLMResponse, ToolResult, SystemError, NoToolFound
 
 
 class ToolManager:

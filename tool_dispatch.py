@@ -2,7 +2,7 @@
 import json
 import re
 from tools.base_tool import BaseTool
-from response import LLMResponse, ToolResult, SystemError, NoToolFound
+from llm.response import LLMResponse, ToolResult, SystemError, NoToolFound
 
 
 # ---------------------------------------------------------------------------

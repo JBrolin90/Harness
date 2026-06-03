@@ -12,7 +12,7 @@ from tool_dispatch import (
     SystemError,
     NoToolFound,
 )
-from response import LLMResponse, ToolCall
+from llm.response import LLMResponse, ToolCall
 
 
 # ---------------------------------------------------------------------------

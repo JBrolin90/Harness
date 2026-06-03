@@ -1,5 +1,5 @@
 """Core configuration for tools - uses ProviderConfig from provider.py."""
-from provider import ProviderConfig
+from llm.provider import ProviderConfig
 
 # Re-export for convenience
 __all__ = ["ProviderConfig", "current_provider_config", "set_current_provider", "get_current_model_name"]
