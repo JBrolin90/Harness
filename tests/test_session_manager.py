@@ -11,7 +11,8 @@ class TestSessionManagerInit:
     """Tests for SessionManager.__init__()"""
 
     @patch('session.session_manager.ProviderManager')
-    def test_init_creates_instance_state(self, mock_pm_class):
+    @patch('session.session_manager.SystemPromptManager')
+    def test_init_creates_instance_state(self, mock_sp_class, mock_pm_class):
         """__init__() should create instance attributes."""
         mock_pm_instance = MagicMock()
         mock_pm_class.return_value = mock_pm_instance
@@ -28,7 +29,8 @@ class TestSessionManagerInit:
         assert hasattr(session, 'system_prompt_manager')
 
     @patch('session.session_manager.ProviderManager')
-    def test_init_creates_system_prompt_manager(self, mock_pm_class):
+    @patch('session.session_manager.SystemPromptManager')
+    def test_init_creates_system_prompt_manager(self, mock_sp_class, mock_pm_class):
         """__init__() should create SystemPromptManager."""
         mock_pm_instance = MagicMock()
         mock_pm_class.return_value = mock_pm_instance
@@ -50,7 +52,8 @@ class TestSessionManagerRunTask:
     @pytest.fixture
     def session_instance(self):
         """Create a mocked session instance for testing."""
-        with patch('session.session_manager.ProviderManager') as mock_pm_class:
+        with patch('session.session_manager.ProviderManager') as mock_pm_class, \
+             patch('session.session_manager.SystemPromptManager') as mock_sp_class:
             mock_pm_instance = MagicMock()
             mock_pm_class.return_value = mock_pm_instance
             mock_provider = MagicMock()

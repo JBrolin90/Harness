@@ -91,7 +91,7 @@ class TestBuildMemoryInstructions:
 
 
 class TestBuildSystemPrompt:
-    """Tests for build_system_prompt function."""
+    """Tests for _build_prompt function."""
 
     @patch('os.getcwd')
     def test_with_memory_includes_memory_section(self, mock_getcwd):
@@ -110,7 +110,7 @@ class TestBuildSystemPrompt:
              patch.object(systemprompt, '_build_system_prompt_additions', return_value=""), \
              patch.object(systemprompt, '_get_agent_py_cached', return_value=""):
 
-            result = systemprompt.build_system_prompt(mock_memory)
+            result = systemprompt._build_prompt(mock_memory)
 
             assert "LONG-TERM MEMORY:" in result
             assert "## Personal" in result
@@ -127,7 +127,7 @@ class TestBuildSystemPrompt:
              patch.object(systemprompt, '_get_agent_py_cached', return_value=""), \
              patch.object(systemprompt, '_build_memory_section', return_value=""):
 
-            result = systemprompt.build_system_prompt(None)
+            result = systemprompt._build_prompt(None)
 
             assert "LONG-TERM MEMORY:" not in result
 
@@ -138,8 +138,8 @@ class TestBuildSystemPrompt:
     def test_includes_tools_and_agent_md(
         self, mock_getcwd, mock_mem_instr, mock_mem_section, mock_agent
     ):
-        """build_system_prompt always includes tools and AGENT.md."""
-        from systemprompt import build_system_prompt
+        """_build_prompt always includes tools and AGENT.md."""
+        from systemprompt import _build_prompt
         
         mock_getcwd.return_value = "/test/project"
 
@@ -149,7 +149,7 @@ class TestBuildSystemPrompt:
              patch('systemprompt._build_memory_section', return_value=""), \
              patch('systemprompt._build_memory_instructions', return_value=""):
 
-            result = build_system_prompt(None)
+            result = _build_prompt(None)
 
             assert "AVAILABLE TOOLS:" in result
             assert "read_file" in result

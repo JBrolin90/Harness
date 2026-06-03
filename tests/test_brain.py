@@ -7,7 +7,7 @@ from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from brain import _parse_tool_calls, _get_content, call_llm, _handle_openai_style_response, _handle_ollama_response
+from brain import _parse_tool_calls, _get_content, consult_llm, _handle_openai_style_response, _handle_ollama_response
 from response import LLMResponse, ToolCall
 
 
@@ -239,7 +239,7 @@ class TestHandleOllamaResponse:
 
 
 class TestCallLlm:
-    """Integration tests for call_llm."""
+    """Integration tests for consult_llm."""
 
     @pytest.fixture
     def mock_provider(self):
@@ -266,7 +266,7 @@ class TestCallLlm:
             }]
         }
 
-        result = call_llm([], "You are a helpful assistant.", mock_provider)
+        result = consult_llm([], "You are a helpful assistant.", mock_provider)
 
         assert isinstance(result, LLMResponse)
         assert result.text == "The capital of France is Paris."
@@ -290,7 +290,7 @@ class TestCallLlm:
             }]
         }
 
-        result = call_llm([], "Run whoami", mock_provider)
+        result = consult_llm([], "Run whoami", mock_provider)
 
         assert isinstance(result, LLMResponse)
         assert len(result.tool_calls) == 1
@@ -302,7 +302,7 @@ class TestCallLlm:
         """HTTP errors are caught and returned as error response."""
         mock_post.side_effect = Exception("HTTP 401 Unauthorized")
 
-        result = call_llm([], "Hello", mock_provider)
+        result = consult_llm([], "Hello", mock_provider)
 
         assert isinstance(result, LLMResponse)
         assert result.error is not None
@@ -327,7 +327,7 @@ class TestCallLlm:
             }
         }
 
-        result = call_llm([], "Hello", ollama_provider)
+        result = consult_llm([], "Hello", ollama_provider)
 
         assert isinstance(result, LLMResponse)
         assert result.text == "Hello from Ollama"
@@ -343,7 +343,7 @@ class TestCallLlm:
             }]
         }
 
-        result = call_llm([], "Hello", mock_provider)
+        result = consult_llm([], "Hello", mock_provider)
 
         assert isinstance(result, LLMResponse)
         assert result.text == "Response"
@@ -359,7 +359,7 @@ class TestCallLlm:
             "choices": [{"message": {"content": "Done"}}]
         }
 
-        call_llm([], "Run bash", mock_provider)
+        consult_llm([], "Run bash", mock_provider)
 
         call_kwargs = mock_post.call_args[1]
         payload = call_kwargs["json"]
