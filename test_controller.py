@@ -11,17 +11,16 @@ class TestHarnessControllerInit:
     """Tests for HarnessController.__init__()"""
 
     @patch('controller.ProviderManager')
-    @patch('controller.get_memory')
-    def test_init_creates_instance_state(self, mock_get_memory, mock_pm_class):
+    def test_init_creates_instance_state(self, mock_pm_class):
         """__init__() should create instance attributes."""
         mock_pm_instance = MagicMock()
         mock_pm_class.return_value = mock_pm_instance
         mock_provider = MagicMock()
         mock_provider.name = "test-provider"
         mock_provider.model = "test-model"
+        mock_provider.provider_type = "minimax"
+        mock_provider.attributes = {}
         mock_pm_instance.get_provider.return_value = mock_provider
-        mock_memory = MagicMock()
-        mock_get_memory.return_value = mock_memory
 
         from controller import HarnessController
         ctrl = HarnessController()
@@ -31,15 +30,14 @@ class TestHarnessControllerInit:
         assert hasattr(ctrl, 'system_prompt_manager')
 
     @patch('controller.ProviderManager')
-    @patch('controller.get_memory')
-    def test_reset_clears_history(self, mock_get_memory, mock_pm_class):
+    def test_reset_clears_history(self, mock_pm_class):
         """reset() should clear conversation history."""
         mock_pm_instance = MagicMock()
         mock_pm_class.return_value = mock_pm_instance
         mock_provider = MagicMock()
+        mock_provider.provider_type = "minimax"
+        mock_provider.attributes = {}
         mock_pm_instance.get_provider.return_value = mock_provider
-        mock_memory = MagicMock()
-        mock_get_memory.return_value = mock_memory
 
         from controller import HarnessController
         ctrl = HarnessController()
@@ -56,21 +54,21 @@ class TestHarnessControllerRunTask:
     @pytest.fixture
     def controller_instance(self):
         """Create a mocked controller instance for testing."""
-        with patch('controller.ProviderManager') as mock_pm_class, \
-             patch('controller.get_memory') as mock_get_memory:
+        with patch('controller.ProviderManager') as mock_pm_class:
             mock_pm_instance = MagicMock()
             mock_pm_class.return_value = mock_pm_instance
             mock_provider = MagicMock()
+            mock_provider.name = "test"
+            mock_provider.model = "test-model"
+            mock_provider.provider_type = "minimax"
+            mock_provider.attributes = {}
             mock_pm_instance.get_provider.return_value = mock_provider
-            mock_memory = MagicMock()
-            mock_get_memory.return_value = mock_memory
 
             from controller import HarnessController
-            from response import NoToolFound
             ctrl = HarnessController()
             ctrl.current_provider = MagicMock()
             ctrl.system_prompt = "Test prompt"
-            ctrl._mock_tool_engine = MagicMock(return_value=NoToolFound())
+            ctrl._mock_tool_engine = MagicMock()
             yield ctrl
 
     @patch('brain.call_llm')
@@ -123,14 +121,13 @@ class TestToolEngineIntegration:
 
     @pytest.fixture
     def controller(self):
-        with patch('controller.ProviderManager') as mock_pm_class, \
-             patch('controller.get_memory') as mock_get_memory:
+        with patch('controller.ProviderManager') as mock_pm_class:
             mock_pm_instance = MagicMock()
             mock_pm_class.return_value = mock_pm_instance
             mock_provider = MagicMock()
+            mock_provider.provider_type = "minimax"
+            mock_provider.attributes = {}
             mock_pm_instance.get_provider.return_value = mock_provider
-            mock_memory = MagicMock()
-            mock_get_memory.return_value = mock_memory
 
             from controller import HarnessController
             ctrl = HarnessController()
@@ -139,7 +136,6 @@ class TestToolEngineIntegration:
     def test_tool_dispatch_function_exists(self, controller):
         """Tool dispatch should be available through IterationHandler."""
         from tool_dispatch import dispatch, dispatch_with_text_parsing
-        # Verify dispatch functions exist and are callable
         assert callable(dispatch)
         assert callable(dispatch_with_text_parsing)
 

@@ -13,29 +13,29 @@ class TestHarnessControllerImport:
     """Tests for importing and basic instantiation."""
 
     @patch('controller.ProviderManager')
-    @patch('controller.get_memory')
-    def test_harness_controller_class_exists(self, mock_get_memory, mock_pm_class):
+    def test_harness_controller_class_exists(self, mock_pm_class):
         """HarnessController class should be accessible from controller module."""
         mock_pm_instance = MagicMock()
         mock_pm_class.return_value = mock_pm_instance
         mock_provider = MagicMock()
+        mock_provider.provider_type = "minimax"
+        mock_provider.attributes = {}
         mock_pm_instance.get_provider.return_value = mock_provider
-        mock_get_memory.return_value = MagicMock()
 
         from controller import HarnessController
         assert HarnessController is not None
 
     @patch('controller.ProviderManager')
-    @patch('controller.get_memory')
-    def test_harness_controller_default_provider(self, mock_get_memory, mock_pm_class):
+    def test_harness_controller_default_provider(self, mock_pm_class):
         """HarnessController() should default to cloud-pro provider."""
         mock_pm_instance = MagicMock()
         mock_pm_class.return_value = mock_pm_instance
         mock_provider = MagicMock()
         mock_provider.name = "cloud-pro"
         mock_provider.model = "MiniMax-M2"
+        mock_provider.provider_type = "minimax"
+        mock_provider.attributes = {}
         mock_pm_instance.get_provider.return_value = mock_provider
-        mock_get_memory.return_value = MagicMock()
 
         from controller import HarnessController
         ctrl = HarnessController()
@@ -44,15 +44,15 @@ class TestHarnessControllerImport:
         assert ctrl.current_provider.name == "cloud-pro"
 
     @patch('controller.ProviderManager')
-    @patch('controller.get_memory')
-    def test_harness_controller_named_provider(self, mock_get_memory, mock_pm_class):
+    def test_harness_controller_named_provider(self, mock_pm_class):
         """HarnessController('local-coder') should use specified provider."""
         mock_pm_instance = MagicMock()
         mock_pm_class.return_value = mock_pm_instance
         mock_provider = MagicMock()
         mock_provider.name = "local-coder"
+        mock_provider.provider_type = "minimax"
+        mock_provider.attributes = {}
         mock_pm_instance.get_provider.return_value = mock_provider
-        mock_get_memory.return_value = MagicMock()
 
         from controller import HarnessController
         ctrl = HarnessController("local-coder")
@@ -67,13 +67,15 @@ class TestHarnessControllerRunTask:
     @pytest.fixture
     def controller_instance(self):
         """Create a mocked controller instance."""
-        with patch('controller.ProviderManager') as mock_pm_class, \
-             patch('controller.get_memory') as mock_get_memory:
+        with patch('controller.ProviderManager') as mock_pm_class:
             mock_pm_instance = MagicMock()
             mock_pm_class.return_value = mock_pm_instance
             mock_provider = MagicMock()
+            mock_provider.name = "test"
+            mock_provider.model = "test-model"
+            mock_provider.provider_type = "minimax"
+            mock_provider.attributes = {}
             mock_pm_instance.get_provider.return_value = mock_provider
-            mock_get_memory.return_value = MagicMock()
 
             from controller import HarnessController
             ctrl = HarnessController()
@@ -126,13 +128,13 @@ class TestControllerReset:
 
     @pytest.fixture
     def controller_instance(self):
-        with patch('controller.ProviderManager') as mock_pm_class, \
-             patch('controller.get_memory') as mock_get_memory:
+        with patch('controller.ProviderManager') as mock_pm_class:
             mock_pm_instance = MagicMock()
             mock_pm_class.return_value = mock_pm_instance
             mock_provider = MagicMock()
+            mock_provider.provider_type = "minimax"
+            mock_provider.attributes = {}
             mock_pm_instance.get_provider.return_value = mock_provider
-            mock_get_memory.return_value = MagicMock()
 
             from controller import HarnessController
             ctrl = HarnessController()

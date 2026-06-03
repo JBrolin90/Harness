@@ -4,7 +4,6 @@ from iteration_handler import IterationHandler
 from systemprompt import SystemPromptManager
 from provider import ProviderManager
 from tools.core_config import set_current_provider
-from memory import get_memory
 
 
 class HarnessController:
@@ -15,8 +14,7 @@ class HarnessController:
         self.current_provider = ProviderManager().get_provider(provider_name)
         set_current_provider(self.current_provider)
         
-        # Memory & system prompt
-        self.memory = get_memory()
+        # System prompt (owns memory internally)
         self.system_prompt_manager = SystemPromptManager(
             provider_type=self.current_provider.provider_type,
             attributes=self.current_provider.attributes
@@ -32,7 +30,7 @@ class HarnessController:
         from brain import call_llm as _call_llm
         call_llm_fn = call_llm or _call_llm
 
-        system_prompt = self.system_prompt_manager.get_system_prompt(self.memory)
+        system_prompt = self.system_prompt_manager.get_system_prompt()
         self.conversation_manager.add_user_message(prompt)
 
         print(f"\n[Task Started] {self.conversation_manager.get_stats()}")

@@ -123,23 +123,40 @@ When reviewing a codebase:
 class SystemPromptManager:
     """Manages system prompt with caching and memory change detection.
     
-    Automatically rebuilds the prompt when memory content changes.
+    Owns memory lifecycle - fetches memory on first use and detects changes.
     """
     
     def __init__(self, provider_type: str = "minimax", attributes: dict | None = None):
+        from memory import get_memory
         self.provider_type = provider_type
         self.attributes = attributes or {}
+        self._memory = get_memory()
         self._cached_prompt: str = ""
         self._last_memory_content: str = ""
+        self._preload()
     
-    def get_system_prompt(self, memory: "Memory | None" = None) -> str:
+    def _preload(self) -> None:
+        """Pre-load system prompt at startup to cache AGENT.py and memory_instructions.md."""
+        self._cached_prompt = _build_prompt(
+            memory=self._memory,
+            provider_type=self.provider_type,
+            attributes=self.attributes
+        )
+        self._last_memory_content = str(self._memory.get_all())
+    
+    def get_system_prompt(self) -> str:
         """Get cached system prompt, rebuilding only if memory changed."""
-        current = str(memory.get_all()) if memory else ""
+        current = str(self._memory.get_all())
         if current != self._last_memory_content:
             self._cached_prompt = _build_prompt(
-                memory=memory,
+                memory=self._memory,
                 provider_type=self.provider_type,
                 attributes=self.attributes
             )
             self._last_memory_content = current
         return self._cached_prompt
+    
+    @property
+    def memory(self):
+        """Access the memory instance."""
+        return self._memory
