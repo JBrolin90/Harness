@@ -15,9 +15,7 @@ class Task:
     def run(self, prompt: str, system_prompt: str, call_llm, provider) -> str:
         self._provider = provider
         self.conversation.add_user_message(prompt)
-        return self._agent_loop(system_prompt, call_llm)
 
-    def _agent_loop(self, system_prompt: str, call_llm) -> str:
         while True:
             response = call_llm(self.conversation.messages, system_prompt, self._provider)
             self.conversation.add_model_response(response.text)
