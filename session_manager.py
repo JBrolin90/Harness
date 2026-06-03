@@ -1,5 +1,6 @@
 """Session manager - orchestrates task execution with LLM and tools."""
 from task import Task
+from tool_manager import ToolManager, ToolEngine
 from systemprompt import SystemPromptManager
 from provider import ProviderManager
 from tools.core_config import set_current_provider
@@ -24,11 +25,16 @@ class SessionManager:
 
         system_prompt = self.system_prompt_manager.get_system_prompt()
 
-        task = Task(self.current_provider, max_iterations)
+        tool_manager = ToolManager(self.current_provider.attributes)
+        self.current_provider.tools = tool_manager.tools
+        tool_engine = tool_manager.tool_engine
+
+        task = Task(tool_engine, max_iterations)
         return task.run(
             prompt=prompt,
             system_prompt=system_prompt,
-            call_llm=call_llm_fn
+            call_llm=call_llm_fn,
+            provider=self.current_provider
         )
 
     def reset(self) -> None:

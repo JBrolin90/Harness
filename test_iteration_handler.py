@@ -112,45 +112,47 @@ class TestTask:
         provider = MagicMock()
         provider.name = "test-provider"
         provider.model = "test-model"
-        provider.attributes = {}
         return provider
 
-    def test_init_sets_up_tool_engine(self, mock_provider):
-        """__init__ should set up tool_engine from ToolManager."""
-        
-        handler = Task(mock_provider)
-        assert hasattr(handler, 'tool_engine')
-        assert callable(handler.tool_engine)
+    @pytest.fixture
+    def mock_tool_engine(self):
+        return MagicMock()
 
-    def test_init_creates_conversation_state(self, mock_provider):
+    def test_init_sets_up_tool_engine(self, mock_tool_engine):
+        """__init__ should store the tool_engine."""
+        
+        handler = Task(mock_tool_engine)
+        assert hasattr(handler, 'tool_engine')
+        assert handler.tool_engine is mock_tool_engine
+
+    def test_init_creates_conversation_state(self, mock_tool_engine):
         """__init__ should create ConversationState."""
         
-        handler = Task(mock_provider)
+        handler = Task(mock_tool_engine)
         assert hasattr(handler, 'conversation')
         assert hasattr(handler.conversation, 'history')
         assert handler.conversation.history == []
 
-    def test_execute_no_tool_call(self, mock_provider):
-        """execute should return text immediately if no tool call."""
+    def test_execute_no_tool_call(self, mock_provider, mock_tool_engine):
+        """run should return text immediately if no tool call."""
         from response import LLMResponse
         
-        handler = Task(mock_provider)
+        handler = Task(mock_tool_engine)
         
         mock_response = LLMResponse(text="I can help with that.")
         mock_call_llm = MagicMock(return_value=mock_response)
         
-        result = handler.run("Hello", "System prompt", mock_call_llm)
+        result = handler.run("Hello", "System prompt", mock_call_llm, mock_provider)
         
         assert result == "I can help with that."
         mock_call_llm.assert_called_once()
 
-    def test_execute_with_tool_call_triggers_loop(self, mock_provider):
-        """execute should trigger loop when tool call detected."""
+    def test_execute_with_tool_call_triggers_loop(self, mock_provider, mock_tool_engine):
+        """run should trigger loop when tool call detected."""
         from response import LLMResponse, NoToolFound
         
-        handler = Task(mock_provider)
+        handler = Task(mock_tool_engine)
         
-        # First response has tool call, second returns NoToolFound
         response_with_tool = LLMResponse(text='{"name": "read_file"}')
         response_without_tool = LLMResponse(text="Done!")
         
@@ -161,17 +163,16 @@ class TestTask:
                 return response_with_tool
             return response_without_tool
         
-        # Mock tool_engine to return NoToolFound on first call
-        handler.tool_engine = MagicMock(return_value=NoToolFound())
+        mock_tool_engine.return_value = NoToolFound()
         
-        result = handler.run("Read a file", "System prompt", mock_call_llm)
+        result = handler.run("Read a file", "System prompt", mock_call_llm, mock_provider)
         
-        assert call_count[0] >= 1  # Check call count on the counter, not the function
+        assert call_count[0] >= 1
 
-    def test_conversation_manager_backwards_compat(self, mock_provider):
+    def test_conversation_manager_backwards_compat(self, mock_tool_engine):
         """conversation_manager property should return conversation."""
         
-        handler = Task(mock_provider)
+        handler = Task(mock_tool_engine)
         assert handler.conversation_manager is handler.conversation
 
 
@@ -183,19 +184,18 @@ class TestTaskIntegration:
         provider = MagicMock()
         provider.name = "test"
         provider.model = "test-model"
-        provider.attributes = {}
         return provider
 
     def test_execute_accumulates_in_conversation(self, mock_provider):
-        """execute should add messages to conversation."""
+        """run should add messages to conversation."""
         from response import LLMResponse
         
-        handler = Task(mock_provider)
+        handler = Task(MagicMock())
         
         mock_response = LLMResponse(text="Response text")
         mock_call_llm = MagicMock(return_value=mock_response)
         
-        handler.run("User prompt", "System prompt", mock_call_llm)
+        handler.run("User prompt", "System prompt", mock_call_llm, mock_provider)
         
         # Should have user message and assistant response
         assert len(handler.conversation.history) == 2

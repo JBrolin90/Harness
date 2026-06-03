@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from response import LLMResponse, ToolResult, SystemError, NoToolFound
-from tool_manager import ToolManager
 
 
 # Constants for output messages
@@ -113,23 +112,21 @@ class ConversationState:
 class Task:
     """Executes a task: initial LLM call + iterations until completion."""
 
-    def __init__(self, provider, max_iterations: int = 25):
-        tool_manager = ToolManager(provider.attributes)
-        provider.tools = tool_manager.tools
-        self.tool_engine = tool_manager.tool_engine
-
-        self.provider = provider
+    def __init__(self, tool_engine: ToolEngine, max_iterations: int = 25):
+        self.tool_engine = tool_engine
         self.max_iterations = max_iterations
         self.conversation = ConversationState()
 
-    def run(self, prompt: str, system_prompt: str, call_llm) -> str:
+    def run(self, prompt: str, system_prompt: str, call_llm, provider) -> str:
+        self._provider = provider
         self.conversation.add_user_message(prompt)
         print(f"\n[Task Started] {self.conversation.get_stats()}")
 
         response = self._call_llm_and_process(
             self.conversation.messages,
             system_prompt,
-            call_llm
+            call_llm,
+            self._provider
         )
 
         if not response.has_tool_calls:
@@ -137,9 +134,9 @@ class Task:
 
         return self._agent_loop(response, system_prompt, call_llm)
 
-    def _call_llm_and_process(self, messages: list[dict], system_prompt: str, call_llm) -> LLMResponse:
-        print(f"[Thinking with {self.provider.name} / {self.provider.model}...]")
-        response = call_llm(messages, system_prompt, self.provider)
+    def _call_llm_and_process(self, messages: list[dict], system_prompt: str, call_llm, provider) -> LLMResponse:
+        print(f"[Thinking with {provider.name} / {provider.model}...]")
+        response = call_llm(messages, system_prompt, provider)
 
         print(f"[Model response type: {'tool_call' if response.has_tool_calls else 'text'}]")
         full_text = ConversationState.clean_assistant_text(response.text)
@@ -185,10 +182,11 @@ class Task:
             response = self._call_llm_and_process(
                 self.conversation.messages,
                 system_prompt,
-                call_llm
+                call_llm,
+                self._provider
             )
 
-            print(f"[Model: {self.provider.model}] {self.conversation.get_stats()} (iteration {iteration + 1})")
+            print(f"[Model: {provider.model}] {self.conversation.get_stats()} (iteration {iteration + 1})")
             print(f"\n================================ End of iteration {iteration + 1} ==========================================\n")
 
             repetition_detector.record(
