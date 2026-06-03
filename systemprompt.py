@@ -70,32 +70,21 @@ def _build_system_prompt_additions() -> str:
     return "\n".join(additions) if additions else ""
 
 
-def build_system_prompt(memory: "Memory | None" = None, provider_type: str = "minimax", attributes: dict | None = None) -> str:
-    """Build system prompt dynamically from registered tools.
-    
-    Args:
-        memory: Optional memory object for long-term storage
-        provider_type: Provider type (e.g., 'minimax', 'ollama') to determine prompt sections
-        attributes: Provider attributes dict for fine-grained control (e.g., enable_small_model_guidance)
-    """
+def _build_prompt(memory: "Memory | None" = None, provider_type: str = "minimax", attributes: dict | None = None) -> str:
+    """Build system prompt dynamically from registered tools."""
     tools_section = _build_tools_section()
     additions = _build_system_prompt_additions()
     memory_section = _build_memory_section(memory)
     memory_instructions = _build_memory_instructions()
     
-    # Determine if small model guidance should be included
-    # Default: False for all providers. Must be explicitly enabled via attributes.
-    # This reduces prompt size for cloud models and gives fine-grained control.
     enable_small_model_guidance = (attributes or {}).get("enable_small_model_guidance", False)
     
-    # Build response format section (small model guidance)
     response_format = """## IMPORTANT: Response Format
 - When you call a tool, wait for the observation before responding with your final answer
 - Provide substantive summaries of what you find - do NOT prefix responses with "[Executed Action]:" or similar placeholders
 - Give direct, helpful answers without repetitive prefixes
 - If you need to call multiple tools, wait for all observations first, then provide a consolidated summary"""
     
-    # Build code review instructions section (small model guidance)
     code_review_instructions = """## Code Review Instructions
 When reviewing a codebase:
 1. First list the files to understand the structure
@@ -132,25 +121,25 @@ When reviewing a codebase:
 
 
 class SystemPromptManager:
-    """Manages system prompt construction.
+    """Manages system prompt with caching and memory change detection.
     
-    Stateless - builds prompt on demand. AGENT.py and memory_instructions.md
-    are cached at module level to avoid repeated file I/O.
+    Automatically rebuilds the prompt when memory content changes.
     """
     
     def __init__(self, provider_type: str = "minimax", attributes: dict | None = None):
         self.provider_type = provider_type
         self.attributes = attributes or {}
+        self._cached_prompt: str = ""
+        self._last_memory_content: str = ""
     
-    def get_prompt(self, memory: "Memory | None" = None) -> str:
-        """Build system prompt with current memory state."""
-        return build_system_prompt(
-            memory=memory,
-            provider_type=self.provider_type,
-            attributes=self.attributes
-        )
-    
-    @property
-    def prompt(self) -> str:
-        """Property alias for get_prompt()."""
-        return self.get_prompt()
+    def get_system_prompt(self, memory: "Memory | None" = None) -> str:
+        """Get cached system prompt, rebuilding only if memory changed."""
+        current = str(memory.get_all()) if memory else ""
+        if current != self._last_memory_content:
+            self._cached_prompt = _build_prompt(
+                memory=memory,
+                provider_type=self.provider_type,
+                attributes=self.attributes
+            )
+            self._last_memory_content = current
+        return self._cached_prompt
