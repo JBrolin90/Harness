@@ -26,20 +26,37 @@ class HarnessController:
         # Memory & system prompt
         self.memory = get_memory()
         self.system_prompt_manager = SystemPromptManager(
-            memory=self.memory,
             provider_type=self.current_provider.provider_type,
             attributes=self.current_provider.attributes
         )
         self.conversation_manager = ConversationManager()
         
+        # Cached prompt state
+        self._cached_prompt: str = ""
+        self._last_memory_content: str = ""
+        self._preload_prompt()
+        
         print("[Config preloaded]")
+
+    def _preload_prompt(self) -> None:
+        """Pre-load system prompt at startup to cache AGENT.py and memory_instructions.md."""
+        self._cached_prompt = self.system_prompt_manager.get_prompt(self.memory)
+        self._last_memory_content = str(self.memory.get_all())
+
+    def _get_cached_prompt(self) -> str:
+        """Get cached system prompt, rebuilding only if memory changed."""
+        current = str(self.memory.get_all())
+        if current != self._last_memory_content:
+            self._cached_prompt = self.system_prompt_manager.get_prompt(self.memory)
+            self._last_memory_content = current
+        return self._cached_prompt
 
     def run_task(self, prompt: str, max_iterations: int = 25, call_llm=None) -> str:
         """Execute a task with the given prompt. Returns the final response."""
         from brain import call_llm as _call_llm
         call_llm_fn = call_llm or _call_llm
 
-        self.system_prompt = self.system_prompt_manager.get_prompt()
+        self.system_prompt = self._get_cached_prompt()
         self.conversation_manager.add_user_message(prompt)
 
         print(f"\n[Task Started] {self.conversation_manager.get_stats()}")

@@ -16,6 +16,7 @@ def _get_agent_py_cached() -> str:
         _cached_agent_py = get_agent_py()
     return _cached_agent_py
 
+
 if TYPE_CHECKING:
     from memory import Memory
 
@@ -131,41 +132,23 @@ When reviewing a codebase:
 
 
 class SystemPromptManager:
-    """Manages system prompt lifecycle with caching and memory change detection.
+    """Manages system prompt construction.
     
-    Automatically rebuilds the prompt when memory content changes.
+    Stateless - builds prompt on demand. AGENT.py and memory_instructions.md
+    are cached at module level to avoid repeated file I/O.
     """
     
-    def __init__(self, memory: "Memory | None" = None, provider_type: str = "minimax", attributes: dict | None = None):
-        self.memory = memory
+    def __init__(self, provider_type: str = "minimax", attributes: dict | None = None):
         self.provider_type = provider_type
         self.attributes = attributes or {}
-        self._cached_prompt: str = ""
-        self._last_memory_content: str = ""
-        self._preload()
     
-    def _preload(self) -> None:
-        """Pre-load system prompt at startup to cache AGENT.py and memory_instructions.md."""
-        self._cached_prompt = build_system_prompt(
-            self.memory,
+    def get_prompt(self, memory: "Memory | None" = None) -> str:
+        """Build system prompt with current memory state."""
+        return build_system_prompt(
+            memory=memory,
             provider_type=self.provider_type,
             attributes=self.attributes
         )
-        if self.memory:
-            self._last_memory_content = str(self.memory.get_all())
-    
-    def get_prompt(self) -> str:
-        """Get cached system prompt, rebuilding only if memory changed."""
-        if self.memory:
-            current_memory = str(self.memory.get_all())
-            if current_memory != self._last_memory_content:
-                self._cached_prompt = build_system_prompt(
-                    self.memory,
-                    provider_type=self.provider_type,
-                    attributes=self.attributes
-                )
-                self._last_memory_content = current_memory
-        return self._cached_prompt
     
     @property
     def prompt(self) -> str:
