@@ -143,12 +143,19 @@ class Task:
 
     def _agent_loop(self, system_prompt: str, call_llm) -> str:
         repetition_detector = RepetitionDetector()
-        response = self._call_llm_and_process(self.conversation.messages, system_prompt, call_llm)
-        
-        if not response.has_tool_calls:
-            return response.text
+        iteration = 0
 
-        for iteration in range(self.max_iterations):
+        while True:
+            iteration += 1
+            response = self._call_llm_and_process(
+                self.conversation.messages,
+                system_prompt,
+                call_llm
+            )
+
+            if not response.has_tool_calls:
+                return response.text
+
             action_sig = self._compute_action_sig(response)
 
             if repetition_detector.is_repetitive(response, action_sig):
@@ -171,23 +178,19 @@ class Task:
 
             self.conversation.add_tool_result(result_str)
 
-            response = self._call_llm_and_process(
-                self.conversation.messages,
-                system_prompt,
-                call_llm
-            )
+            print(f"[Model: {self._provider.model}] {self.conversation.get_stats()} (iteration {iteration})")
+            print(f"\n================================ End of iteration {iteration} ==========================================\n")
 
-            print(f"[Model: {self._provider.model}] {self.conversation.get_stats()} (iteration {iteration + 1})")
-            print(f"\n================================ End of iteration {iteration + 1} ==========================================\n")
+            if iteration >= self.max_iterations:
+                print(f"\n[WARNING: Task reached maximum iterations ({self.max_iterations}). Stopping safety check.]")
+                print("\n========================== Max Iterations Reached ====================================\n")
+                break
 
             repetition_detector.record(
                 action_sig,
                 ConversationState.clean_assistant_text(response.text),
                 response.has_tool_calls
             )
-        else:
-            print(f"\n[WARNING: Task reached maximum iterations ({self.max_iterations}). Stopping safety check.]")
-            print("\n========================== Max Iterations Reached ====================================\n")
 
         return response.text if response.text else NO_TEXT_RESPONSE
 
