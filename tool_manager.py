@@ -13,9 +13,10 @@ ToolEngine = Callable[[LLMResponse], ToolResult | SystemError | NoToolFound]
 class ToolManager:
     """Manages tool registry and dispatch engine selection."""
 
-    def __init__(self):
+    def __init__(self, provider_attributes: dict | None = None):
         self._tools: list[dict] = []
-        self.tool_engine: ToolEngine = dispatch
+        self.build_tools_list()
+        self.select_dispatch_engine(provider_attributes)
 
     def build_tools_list(self) -> list[dict]:
         """Build tools list from registered BaseTool classes."""
@@ -43,14 +44,6 @@ class ToolManager:
         
         self.tool_engine = dispatch_with_text_parsing if has_text_parsing else dispatch
         return self.tool_engine
-
-    def setup(self, provider_attributes: dict | None = None) -> None:
-        """Configure tool manager for a provider.
-        
-        Builds tools list and selects appropriate dispatch engine.
-        """
-        self.build_tools_list()
-        self.select_dispatch_engine(provider_attributes)
 
     @property
     def tools(self) -> list[dict]:

@@ -114,8 +114,7 @@ class Task:
     """Executes a task: initial LLM call + iterations until completion."""
 
     def __init__(self, provider, max_iterations: int = 25):
-        tool_manager = ToolManager()
-        tool_manager.setup(provider.attributes)
+        tool_manager = ToolManager(provider.attributes)
         provider.tools = tool_manager.tools
         self.tool_engine = tool_manager.tool_engine
 
