@@ -7,7 +7,6 @@ from terminal_history import terminal_history_upgrade
 from provider import ProviderManager
 from tools.core_config import set_current_provider
 from memory import get_memory
-from response import LLMResponse
 
 
 class HarnessController:
@@ -15,22 +14,16 @@ class HarnessController:
 
     def __init__(self, provider_name: str = "cloud-pro", memory_path: str | None = None):
         terminal_history_upgrade()
-        self._init_provider(provider_name)
-        self._init_tools()
-        self._init_system_prompt()
-
-    def _init_provider(self, provider_name: str) -> None:
-        """Initialize the provider."""
+        
+        # Provider
         self.current_provider = ProviderManager().get_provider(provider_name)
         set_current_provider(self.current_provider)
-
-    def _init_tools(self) -> None:
-        """Initialize tool manager and configure for provider."""
+        
+        # Tools
         self.tool_manager = ToolManager()
         self.tool_manager.setup_for_provider(self.current_provider)
-
-    def _init_system_prompt(self) -> None:
-        """Initialize memory and system prompt manager."""
+        
+        # Memory & system prompt
         self.memory = get_memory()
         self.system_prompt_manager = SystemPromptManager(
             memory=self.memory,
@@ -38,6 +31,7 @@ class HarnessController:
             attributes=self.current_provider.attributes
         )
         self.conversation_manager = ConversationManager()
+        
         print("[Config preloaded]")
 
     def run_task(self, prompt: str, max_iterations: int = 25, call_llm=None) -> str:
