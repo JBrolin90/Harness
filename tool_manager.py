@@ -44,14 +44,13 @@ class ToolManager:
         self.tool_engine = dispatch_with_text_parsing if has_text_parsing else dispatch
         return self.tool_engine
 
-    def setup_for_provider(self, provider) -> None:
-        """Configure tool manager for a given provider.
+    def setup(self, provider_attributes: dict | None = None) -> None:
+        """Configure tool manager for a provider.
         
-        Builds tools list and attaches to provider, then selects dispatch engine.
+        Builds tools list and selects appropriate dispatch engine.
         """
         self.build_tools_list()
-        provider.tools = self._tools
-        self.select_dispatch_engine(provider.attributes)
+        self.select_dispatch_engine(provider_attributes)
 
     @property
     def tools(self) -> list[dict]:

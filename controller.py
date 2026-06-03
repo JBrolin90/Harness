@@ -18,10 +18,7 @@ class HarnessController:
         # Provider
         self.current_provider = ProviderManager().get_provider(provider_name)
         set_current_provider(self.current_provider)
-        
-        # Tools
-        self.tool_manager = ToolManager()
-        self.tool_manager.setup_for_provider(self.current_provider)
+        self.current_provider.tools = self._setup_tools()
         
         # Memory & system prompt
         self.memory = get_memory()
@@ -29,9 +26,18 @@ class HarnessController:
             provider_type=self.current_provider.provider_type,
             attributes=self.current_provider.attributes
         )
+        
+        # Conversation
         self.conversation_manager = ConversationManager()
         
         print("[Config preloaded]")
+
+    def _setup_tools(self) -> list[dict]:
+        """Build and configure tools for the provider."""
+        tool_manager = ToolManager()
+        tool_manager.setup(self.current_provider.attributes)
+        self.tool_manager = tool_manager
+        return tool_manager.tools
 
     def run_task(self, prompt: str, max_iterations: int = 25, call_llm=None) -> str:
         """Execute a task with the given prompt. Returns the final response."""
