@@ -6,6 +6,7 @@ from response import LLMResponse
 
 from task.constants import SYSTEM_MESSAGE_REPETITION
 from task.action_signature import ActionSignature
+from session.conversation_history import ConversationHistory
 
 
 class StopReason(StrEnum):
@@ -21,8 +22,11 @@ class RepetitionDetector:
         self._previous: ActionSignature | None = None
         self._has_recorded_action: bool = False
 
-    def check(self, response: LLMResponse, action_sig: str | None, iteration: int, max_iterations: int) -> StopReason | None:
-        """Check response and determine if we should stop. Returns StopReason or None to continue."""
+    def evaluate(self, response: LLMResponse, iteration: int, max_iterations: int) -> StopReason | None:
+        """Evaluate response, record state for next iteration, return stop reason."""
+        action_sig = self.compute_signature(response)
+
+        # Check if we should stop
         if iteration >= max_iterations:
             return StopReason.MAX_ITERATIONS
 
@@ -31,6 +35,13 @@ class RepetitionDetector:
 
         if self.is_repetitive(response, action_sig):
             return StopReason.REPETITION
+
+        # Record for repetition detection on next iteration
+        self.record(
+            action_sig,
+            ConversationHistory.clean_assistant_text(response.text),
+            response.has_tool_calls
+        )
 
         return None
 

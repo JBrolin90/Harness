@@ -1,5 +1,5 @@
 """Executes a task: initial LLM call + iterations until completion."""
-from response import LLMResponse, ToolResult, SystemError
+from response import ToolResult, SystemError
 
 from task.constants import THINKING_PLACEHOLDER, NO_TEXT_RESPONSE
 from task.tool_engine import ToolEngine
@@ -34,9 +34,8 @@ class Task:
                 clean_text if clean_text.strip() else THINKING_PLACEHOLDER
             )
 
-            # Check if we should stop
-            action_sig = RepetitionDetector.compute_signature(response)
-            stop = detector.check(response, action_sig, iteration, self.max_iterations)
+            # Check if we should stop, record for next iteration
+            stop = detector.evaluate(response, iteration, self.max_iterations)
 
             if stop == StopReason.NO_TOOL_CALL:
                 return response.text
@@ -54,13 +53,6 @@ class Task:
                     result_str = str(e)
 
             self.conversation.add_tool_result(result_str)
-
-            if stop is None:
-                detector.record(
-                    action_sig,
-                    ConversationHistory.clean_assistant_text(response.text),
-                    response.has_tool_calls
-                )
 
         return response.text if response.text else NO_TEXT_RESPONSE
 
