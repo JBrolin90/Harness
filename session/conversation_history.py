@@ -21,7 +21,8 @@ class ConversationHistory:
     def add_assistant_message(self, content: str) -> None:
         self.history.append({"role": "assistant", "content": content})
 
-    def add_tool_result(self, content: str) -> None:
+    def add_tool_result_message(self, content: str) -> None:
+        """Add a tool result message to history."""
         self.history.append({"role": "tool", "content": content})
 
     def add_model_response(self, text: str) -> None:
@@ -29,7 +30,7 @@ class ConversationHistory:
         cleaned = self._clean_text(text)
         self.add_assistant_message(cleaned if cleaned.strip() else THINKING_PLACEHOLDER)
 
-    def add_tool(self, result) -> bool:
+    def add_tool_result(self, result) -> bool:
         """Add tool result. Returns True if added successfully (no repetition), False to stop."""
         match result:
             case _ if hasattr(result, 'tool_name') and hasattr(result, 'output'):
@@ -39,7 +40,7 @@ class ConversationHistory:
             case _:
                 result_str = str(result)
 
-        self.add_tool_result(result_str)
+        self.add_tool_result_message(result_str)
         
         # Check last assistant message for repetition
         last_msg = next((m for m in reversed(self.history) if m["role"] == "assistant"), None)
