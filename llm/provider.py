@@ -3,18 +3,50 @@ import json
 import os
 from dataclasses import dataclass, asdict, field
 from typing import List, Optional
+from enum import Enum
+
+
+class ProviderType(Enum):
+    """Supported LLM provider types."""
+    OLLAMA = "ollama"
+    MINIMAX = "minimax"
+    OPENAI = "openai"
+    OPENROUTER = "openrouter"
+
+    @classmethod
+    def from_string(cls, value: str) -> "ProviderType":
+        """Create from string, defaulting to OPENAI for unknown providers."""
+        try:
+            return cls(value.lower())
+        except ValueError:
+            return cls.OPENAI
+
+    @property
+    def is_local(self) -> bool:
+        """Check if this is a local provider (doesn't need API key)."""
+        return self == self.OLLAMA
+
+    @property
+    def supports_function_calling(self) -> bool:
+        """Check if provider supports native function calling."""
+        return self != self.OLLAMA
 
 
 @dataclass
 class ProviderConfig:
     """Individual LLM Configuration."""
     name: str
-    provider_type: str  # e.g., 'minimax', 'ollama'
+    provider_type: ProviderType  # ProviderType enum instead of raw string
     url: str
     model: str
     api_key_env_var: Optional[str] = None  # Name of the environment variable holding the API key
     attributes: dict = field(default_factory=dict)
     tools: List[dict] = field(default_factory=list)  # Native function calling tools
+
+    def __post_init__(self):
+        """Convert string provider_type to ProviderType enum if needed."""
+        if isinstance(self.provider_type, str):
+            self.provider_type = ProviderType.from_string(self.provider_type)
 
 
 class ProviderManager:
@@ -37,7 +69,7 @@ class ProviderManager:
         cloud_pro_attrs = recommendations.get("cloud-pro", {}).get("attributes", {})
         self.providers.append(ProviderConfig(
             name="cloud-pro",
-            provider_type="minimax",
+            provider_type=ProviderType.MINIMAX,
             url="https://api.minimax.io/v1/text/chatcompletion_v2",
             model="MiniMax-M2.7",
             api_key_env_var="MINIMAX_API_KEY",
@@ -48,7 +80,7 @@ class ProviderManager:
         local_coder_attrs = recommendations.get("local-coder", {}).get("attributes", {})
         self.providers.append(ProviderConfig(
             name="local-coder",
-            provider_type="ollama",
+            provider_type=ProviderType.OLLAMA,
             url="http://localhost:11434/api/chat",
             model="qwen2.5-coder:7b",
             api_key_env_var="OLLAMA_DUMMY_KEY",

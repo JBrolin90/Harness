@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'llm'))
 
 from llm.brain import _parse_tool_calls, _extract_text_content, _handle_openai_response, _handle_ollama_response, consult_llm
 from llm.response import LLMResponse, ToolCall
+from llm.provider import ProviderType
 
 
 class TestParseToolCalls:
@@ -246,7 +247,7 @@ class TestCallLlm:
         """Create a mock ProviderConfig."""
         provider = MagicMock()
         provider.name = "test-provider"
-        provider.provider_type = "openai"
+        provider.provider_type = ProviderType.OPENAI
         provider.url = "https://api.test.com/v1/chat/completions"
         provider.api_key_env_var = "TEST_API_KEY"
         provider.model = "gpt-4"
@@ -313,7 +314,7 @@ class TestCallLlm:
         """Ollama provider uses different response format."""
         ollama_provider = MagicMock()
         ollama_provider.name = "local-ollama"
-        ollama_provider.provider_type = "ollama"
+        ollama_provider.provider_type = ProviderType.OLLAMA
         ollama_provider.url = "http://localhost:11434/api/chat"
         ollama_provider.api_key_env_var = ""
         ollama_provider.model = "llama3"

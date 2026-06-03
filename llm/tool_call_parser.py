@@ -2,6 +2,7 @@
 import json
 from abc import ABC, abstractmethod
 
+from .provider import ProviderType
 from .response import ToolCall
 
 
@@ -129,18 +130,22 @@ class MultiFormatParser(ToolCallParser):
         return parser.extract_tool_calls(message)
 
 
-def get_parser(provider_type: str) -> ToolCallParser:
+def get_parser(provider_type: ProviderType | str) -> ToolCallParser:
     """Get appropriate tool call parser for provider type.
     
     Args:
-        provider_type: Provider identifier (ollama, minimax, openai, etc.)
+        provider_type: ProviderType enum or string identifier
     
     Returns:
         ToolCallParser instance
     """
-    if provider_type == "ollama":
+    # Normalize to enum
+    if isinstance(provider_type, str):
+        provider_type = ProviderType.from_string(provider_type)
+    
+    if provider_type == ProviderType.OLLAMA:
         return OllamaParser()
-    elif provider_type == "minimax":
+    elif provider_type == ProviderType.MINIMAX:
         return MultiFormatParser()
     else:
         # openai, openrouter, etc.

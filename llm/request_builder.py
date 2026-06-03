@@ -1,7 +1,7 @@
 """Request building for LLM API calls."""
 import os
 
-from .provider import ProviderConfig
+from .provider import ProviderConfig, ProviderType
 from .response import LLMResponse
 
 
@@ -52,9 +52,9 @@ class RequestBuilder:
         
         already_wrapped = self._tools_wrapped(tools)
         
-        if self.config.provider_type == "minimax":
+        if self.config.provider_type == ProviderType.MINIMAX:
             return tools if already_wrapped else [{"type": "function", "function": t} for t in tools]
-        elif self.config.provider_type == "ollama":
+        elif self.config.provider_type == ProviderType.OLLAMA:
             return tools
         else:
             # OpenAI-compatible

@@ -2,7 +2,7 @@
 import json
 import requests
 
-from .provider import ProviderConfig
+from .provider import ProviderConfig, ProviderType
 from .request_builder import RequestBuilder
 from .tool_call_parser import get_parser, parse_arguments, TopLevelFunctionCallParser, OpenAIStyleParser, OllamaParser, MultiFormatParser
 from .retry_handler import RetryHandler
@@ -27,10 +27,12 @@ def _parse_tool_calls(message: dict) -> list[ToolCall]:
     return MultiFormatParser().extract_tool_calls(message)
 
 
-def _format_tools_for_provider(tools: list, provider_type: str) -> list | None:
+def _format_tools_for_provider(tools: list, provider_type: ProviderType | str) -> list | None:
     """Format tools according to provider requirements (delegates to RequestBuilder)."""
     from .request_builder import RequestBuilder
-    config = type('Config', (), {'provider_type': provider_type, 'tools': tools})()
+    # Normalize to ProviderType enum
+    pt = provider_type if isinstance(provider_type, ProviderType) else ProviderType.from_string(provider_type)
+    config = type('Config', (), {'provider_type': pt, 'tools': tools})()
     builder = RequestBuilder(config)
     return builder._format_tools_for_provider(tools)
 
@@ -51,9 +53,9 @@ def consult_llm(history: list, system_prompt: str, config: ProviderConfig) -> LL
     """Unified LLM request handler using a ProviderConfig object."""
     builder = RequestBuilder(config)
     
-    # Warn if API key is missing (skip for ollama which doesn't need one)
+    # Warn if API key is missing (skip for local providers)
     env_api_key = builder.api_key()
-    if not env_api_key and config.provider_type != "ollama":
+    if not env_api_key and not config.provider_type.is_local:
         print(f"[WARNING: API key for {config.name} not found in environment variable '{config.api_key_env_var}']")
 
     headers = builder.headers()
@@ -64,7 +66,7 @@ def consult_llm(history: list, system_prompt: str, config: ProviderConfig) -> LL
         data = response.json()
 
         # Dispatch to provider-specific handler
-        if config.provider_type == "ollama":
+        if config.provider_type == ProviderType.OLLAMA:
             return _handle_ollama_response(data, config.provider_type)
         else:
             return _handle_openai_response(data, config.provider_type)
