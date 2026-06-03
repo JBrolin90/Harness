@@ -1,10 +1,7 @@
 """Executes a task: initial LLM call + iterations until completion."""
-from response import ToolResult, SystemError
-
 from task.constants import NO_TEXT_RESPONSE
 from task.tool_engine import ToolEngine
 from session.conversation_history import ConversationHistory
-from task.repetition_detector import RepetitionDetector
 
 
 class Task:
@@ -21,8 +18,6 @@ class Task:
         return self._agent_loop(system_prompt, call_llm)
 
     def _agent_loop(self, system_prompt: str, call_llm) -> str:
-        detector = RepetitionDetector()
-
         while True:
             response = call_llm(self.conversation.messages, system_prompt, self._provider)
             self.conversation.add_model_response(response.text)
@@ -32,9 +27,7 @@ class Task:
 
             result = self.tool_engine(response)
 
-            should_stop = self.conversation.add_tool_response(result, detector)
-
-            if should_stop:
+            if self.conversation.add_tool_response(result):
                 break
 
         return response.text if response.text else NO_TEXT_RESPONSE

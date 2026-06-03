@@ -2,6 +2,7 @@
 import re
 
 from task.constants import THINKING_PLACEHOLDER
+from task.repetition_detector import RepetitionDetector
 
 
 class ConversationHistory:
@@ -12,6 +13,7 @@ class ConversationHistory:
 
     def __init__(self):
         self.history: list[dict] = []
+        self._repetition_detector = RepetitionDetector()
 
     def add_user_message(self, content: str) -> None:
         self.history.append({"role": "user", "content": content})
@@ -27,8 +29,8 @@ class ConversationHistory:
         cleaned = self._clean_text(text)
         self.add_assistant_message(cleaned if cleaned.strip() else THINKING_PLACEHOLDER)
 
-    def add_tool_response(self, result, detector) -> bool:
-        """Add tool result and check for repetition. Returns True to stop (no more tool calls)."""
+    def add_tool_response(self, result) -> bool:
+        """Add tool result and check for repetition. Returns True to stop (repetition detected)."""
         match result:
             case _ if hasattr(result, 'tool_name') and hasattr(result, 'output'):
                 result_str = str(result.output) if result.tool_name == "system" else f"Observation: {str(result.output)}"
@@ -38,7 +40,15 @@ class ConversationHistory:
                 result_str = str(result)
 
         self.add_tool_result(result_str)
-        return detector.is_repetitive_after_record()
+        
+        # Check last assistant message for repetition
+        last_msg = next((m for m in reversed(self.history) if m["role"] == "assistant"), None)
+        if last_msg:
+            return self._repetition_detector.check_after_tool_result(
+                text=last_msg["content"],
+                has_tool_calls=True
+            )
+        return False
 
     @staticmethod
     def _clean_text(text: str) -> str:
@@ -60,3 +70,4 @@ class ConversationHistory:
 
     def reset(self) -> None:
         self.history = []
+        self._repetition_detector = RepetitionDetector()
