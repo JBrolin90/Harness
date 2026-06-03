@@ -186,7 +186,7 @@ class Task:
                 self._provider
             )
 
-            print(f"[Model: {provider.model}] {self.conversation.get_stats()} (iteration {iteration + 1})")
+            print(f"[Model: {self._provider.model}] {self.conversation.get_stats()} (iteration {iteration + 1})")
             print(f"\n================================ End of iteration {iteration + 1} ==========================================\n")
 
             repetition_detector.record(
