@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 class TestSessionManagerInit:
     """Tests for SessionManager.__init__()"""
 
-    @patch('controller.ProviderManager')
+    @patch('session_manager.ProviderManager')
     def test_init_creates_instance_state(self, mock_pm_class):
         """__init__() should create instance attributes."""
         mock_pm_instance = MagicMock()
@@ -21,13 +21,13 @@ class TestSessionManagerInit:
         mock_provider.attributes = {}
         mock_pm_instance.get_provider.return_value = mock_provider
 
-        from controller import SessionManager
+        from session_manager import SessionManager
         session = SessionManager()
 
         assert hasattr(session, 'current_provider')
         assert hasattr(session, 'system_prompt_manager')
 
-    @patch('controller.ProviderManager')
+    @patch('session_manager.ProviderManager')
     def test_init_creates_system_prompt_manager(self, mock_pm_class):
         """__init__() should create SystemPromptManager."""
         mock_pm_instance = MagicMock()
@@ -37,7 +37,7 @@ class TestSessionManagerInit:
         mock_provider.attributes = {}
         mock_pm_instance.get_provider.return_value = mock_provider
 
-        from controller import SessionManager
+        from session_manager import SessionManager
         session = SessionManager()
 
         assert hasattr(session, 'system_prompt_manager')
@@ -50,7 +50,7 @@ class TestSessionManagerRunTask:
     @pytest.fixture
     def session_instance(self):
         """Create a mocked session instance for testing."""
-        with patch('controller.ProviderManager') as mock_pm_class:
+        with patch('session_manager.ProviderManager') as mock_pm_class:
             mock_pm_instance = MagicMock()
             mock_pm_class.return_value = mock_pm_instance
             mock_provider = MagicMock()
@@ -60,7 +60,7 @@ class TestSessionManagerRunTask:
             mock_provider.attributes = {}
             mock_pm_instance.get_provider.return_value = mock_provider
 
-            from controller import SessionManager
+            from session_manager import SessionManager
             session = SessionManager()
             session.current_provider = MagicMock()
             yield session
@@ -106,7 +106,7 @@ class TestSessionManagerRunTask:
         mock_execute.return_value = "Done"
         session_instance.system_prompt_manager.get_system_prompt = MagicMock(return_value="System prompt")
 
-        with patch('controller.IterationHandler') as mock_handler_class:
+        with patch('session_manager.IterationHandler') as mock_handler_class:
             mock_handler_instance = MagicMock()
             mock_handler_instance.execute.return_value = "Done"
             mock_handler_class.return_value = mock_handler_instance

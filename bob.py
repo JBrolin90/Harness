@@ -1,5 +1,5 @@
 import argparse
-from controller import SessionManager
+from session_manager import SessionManager
 from terminal_history import terminal_history_upgrade
 
 VERSION = "0.3.0"
