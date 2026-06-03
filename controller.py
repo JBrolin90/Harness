@@ -2,9 +2,9 @@
 from conversation import ConversationManager
 from iteration_handler import IterationHandler
 from tool_manager import ToolManager
+from systemprompt import SystemPromptManager
 from terminal_history import terminal_history_upgrade
 from provider import ProviderManager
-from systemprompt import build_system_prompt
 from tools.core_config import set_current_provider
 from memory import get_memory, load_memory_instructions
 from response import LLMResponse
@@ -30,42 +30,22 @@ class HarnessController:
         self.tool_manager.setup_for_provider(self.current_provider)
 
     def _init_system_prompt(self) -> None:
-        """Initialize memory and system prompt."""
+        """Initialize memory and system prompt manager."""
         self.memory = get_memory()
-        self._cached_system_prompt: str = ""
-        self._last_memory_content: str = ""
-        self._preload_system_prompt()
-        self.conversation_manager = ConversationManager()
-        print("[Config preloaded]")
-
-    def _preload_system_prompt(self) -> None:
-        """Pre-load system prompt at startup to cache AGENT.py and memory_instructions.md."""
-        self.system_prompt = build_system_prompt(
-            self.memory,
+        self.system_prompt_manager = SystemPromptManager(
+            memory=self.memory,
             provider_type=self.current_provider.provider_type,
             attributes=self.current_provider.attributes
         )
-        self._cached_system_prompt = self.system_prompt
-        self._last_memory_content = str(self.memory.get_all())
-
-    def _get_cached_system_prompt(self) -> str:
-        """Get cached system prompt, rebuilding only if memory changed."""
-        current_memory = str(self.memory.get_all())
-        if current_memory != self._last_memory_content:
-            self._cached_system_prompt = build_system_prompt(
-                self.memory,
-                provider_type=self.current_provider.provider_type,
-                attributes=self.current_provider.attributes
-            )
-            self._last_memory_content = current_memory
-        return self._cached_system_prompt
+        self.conversation_manager = ConversationManager()
+        print("[Config preloaded]")
 
     def run_task(self, prompt: str, max_iterations: int = 25, call_llm=None) -> str:
         """Execute a task with the given prompt. Returns the final response."""
         from brain import call_llm as _call_llm
         call_llm_fn = call_llm or _call_llm
 
-        self.system_prompt = self._get_cached_system_prompt()
+        self.system_prompt = self.system_prompt_manager.get_prompt()
         self.conversation_manager.add_user_message(prompt)
 
         print(f"\n[Task Started] {self.conversation_manager.get_stats()}")

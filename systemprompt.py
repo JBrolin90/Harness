@@ -128,3 +128,46 @@ When reviewing a codebase:
     ])
     
     return "\n".join(parts)
+
+
+class SystemPromptManager:
+    """Manages system prompt lifecycle with caching and memory change detection.
+    
+    Automatically rebuilds the prompt when memory content changes.
+    """
+    
+    def __init__(self, memory: "Memory | None" = None, provider_type: str = "minimax", attributes: dict | None = None):
+        self.memory = memory
+        self.provider_type = provider_type
+        self.attributes = attributes or {}
+        self._cached_prompt: str = ""
+        self._last_memory_content: str = ""
+        self._preload()
+    
+    def _preload(self) -> None:
+        """Pre-load system prompt at startup to cache AGENT.py and memory_instructions.md."""
+        self._cached_prompt = build_system_prompt(
+            self.memory,
+            provider_type=self.provider_type,
+            attributes=self.attributes
+        )
+        if self.memory:
+            self._last_memory_content = str(self.memory.get_all())
+    
+    def get_prompt(self) -> str:
+        """Get cached system prompt, rebuilding only if memory changed."""
+        if self.memory:
+            current_memory = str(self.memory.get_all())
+            if current_memory != self._last_memory_content:
+                self._cached_prompt = build_system_prompt(
+                    self.memory,
+                    provider_type=self.provider_type,
+                    attributes=self.attributes
+                )
+                self._last_memory_content = current_memory
+        return self._cached_prompt
+    
+    @property
+    def prompt(self) -> str:
+        """Property alias for get_prompt()."""
+        return self.get_prompt()
