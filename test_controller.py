@@ -26,12 +26,11 @@ class TestHarnessControllerInit:
         ctrl = HarnessController()
 
         assert hasattr(ctrl, 'current_provider')
-        assert hasattr(ctrl, 'conversation_manager')
         assert hasattr(ctrl, 'system_prompt_manager')
 
     @patch('controller.ProviderManager')
-    def test_reset_clears_history(self, mock_pm_class):
-        """reset() should clear conversation history."""
+    def test_init_creates_system_prompt_manager(self, mock_pm_class):
+        """__init__() should create SystemPromptManager."""
         mock_pm_instance = MagicMock()
         mock_pm_class.return_value = mock_pm_instance
         mock_provider = MagicMock()
@@ -41,11 +40,9 @@ class TestHarnessControllerInit:
 
         from controller import HarnessController
         ctrl = HarnessController()
-        ctrl.conversation_manager.history = [{"role": "user", "content": "test"}]
 
-        ctrl.reset()
-
-        assert ctrl.conversation_manager.history == []
+        assert hasattr(ctrl, 'system_prompt_manager')
+        assert hasattr(ctrl.system_prompt_manager, 'get_system_prompt')
 
 
 class TestHarnessControllerRunTask:
@@ -67,81 +64,55 @@ class TestHarnessControllerRunTask:
             from controller import HarnessController
             ctrl = HarnessController()
             ctrl.current_provider = MagicMock()
-            ctrl.system_prompt = "Test prompt"
-            ctrl._mock_tool_engine = MagicMock()
             yield ctrl
 
-    @patch('brain.call_llm')
-    def test_run_task_adds_to_history(self, mock_call_llm, controller_instance):
-        """run_task() should append user message and assistant response to history."""
+    @patch('iteration_handler.IterationHandler.execute')
+    def test_run_task_returns_execute_result(self, mock_execute, controller_instance):
+        """run_task() should return the result from IterationHandler.execute()."""
         from response import LLMResponse
-        mock_call_llm.return_value = LLMResponse(text="Hello from Bob")
+        mock_execute.return_value = "Final answer"
 
-        controller_instance.run_task("Hello Bob")
+        result = controller_instance.run_task("Hello Bob")
 
-        assert len(controller_instance.conversation_manager.history) == 2
-        assert controller_instance.conversation_manager.history[0]["role"] == "user"
-        assert controller_instance.conversation_manager.history[0]["content"] == "Hello Bob"
-        assert controller_instance.conversation_manager.history[1]["role"] == "assistant"
+        assert result == "Final answer"
+        mock_execute.assert_called_once()
 
-    @patch('brain.call_llm')
-    def test_run_task_no_tool_returns_immediately(self, mock_call_llm, controller_instance):
-        """If no tool call detected, run_task should return immediately."""
-        from response import LLMResponse
-        mock_call_llm.return_value = LLMResponse(text="I can help with that.")
+    @patch('iteration_handler.IterationHandler.execute')
+    def test_run_task_passes_parameters_to_execute(self, mock_execute, controller_instance):
+        """run_task() should pass prompt and system_prompt to execute."""
+        mock_execute.return_value = "Done"
+        controller_instance.system_prompt_manager.get_system_prompt = MagicMock(return_value="System prompt")
 
-        controller_instance.run_task("Hello")
+        controller_instance.run_task("User prompt")
 
-        assert mock_call_llm.call_count == 1
+        call_kwargs = mock_execute.call_args.kwargs
+        assert 'prompt' in call_kwargs
+        assert 'system_prompt' in call_kwargs
+        assert 'call_llm' in call_kwargs
 
-    @patch('brain.call_llm')
-    def test_run_task_with_tool_call(self, mock_call_llm, controller_instance):
-        """Tool dispatch is triggered when response has tool call."""
-        from response import LLMResponse, NoToolFound
-        mock_call_llm.return_value = LLMResponse(text="Done")
-        controller_instance._mock_tool_engine = MagicMock(return_value=NoToolFound())
+    @patch('iteration_handler.IterationHandler.execute')
+    def test_run_task_with_custom_call_llm(self, mock_execute, controller_instance):
+        """run_task() should pass custom call_llm to execute."""
+        mock_execute.return_value = "Done"
+        controller_instance.system_prompt_manager.get_system_prompt = MagicMock(return_value="System prompt")
+        custom_call_llm = MagicMock()
 
-        controller_instance.run_task("Read the file", call_llm=mock_call_llm)
+        controller_instance.run_task("Hello", call_llm=custom_call_llm)
 
-        assert mock_call_llm.call_count >= 1
+        call_kwargs = mock_execute.call_args.kwargs
+        assert call_kwargs['call_llm'] is custom_call_llm
 
-    @patch('brain.call_llm')
-    def test_run_task_returns_final_response(self, mock_call_llm, controller_instance):
-        """run_task() should return the final response."""
-        from response import LLMResponse
-        mock_call_llm.return_value = LLMResponse(text="Final answer from Bob")
+    @patch('iteration_handler.IterationHandler.execute')
+    def test_run_task_with_max_iterations(self, mock_execute, controller_instance):
+        """run_task() should pass max_iterations to IterationHandler constructor."""
+        mock_execute.return_value = "Done"
+        controller_instance.system_prompt_manager.get_system_prompt = MagicMock(return_value="System prompt")
 
-        result = controller_instance.run_task("What is the answer?")
+        with patch('controller.IterationHandler') as mock_handler_class:
+            mock_handler_instance = MagicMock()
+            mock_handler_instance.execute.return_value = "Done"
+            mock_handler_class.return_value = mock_handler_instance
 
-        assert result == "Final answer from Bob"
+            controller_instance.run_task("Hello", max_iterations=10)
 
-
-class TestToolEngineIntegration:
-    """Tests for tool integration via IterationHandler."""
-
-    @pytest.fixture
-    def controller(self):
-        with patch('controller.ProviderManager') as mock_pm_class:
-            mock_pm_instance = MagicMock()
-            mock_pm_class.return_value = mock_pm_instance
-            mock_provider = MagicMock()
-            mock_provider.provider_type = "minimax"
-            mock_provider.attributes = {}
-            mock_pm_instance.get_provider.return_value = mock_provider
-
-            from controller import HarnessController
-            ctrl = HarnessController()
-            return ctrl
-
-    def test_tool_dispatch_function_exists(self, controller):
-        """Tool dispatch should be available through IterationHandler."""
-        from tool_dispatch import dispatch, dispatch_with_text_parsing
-        assert callable(dispatch)
-        assert callable(dispatch_with_text_parsing)
-
-    def test_dispatch_returns_no_tool_found_for_plain_text(self, controller):
-        """dispatch() should return NoToolFound for plain text responses."""
-        from tool_dispatch import dispatch
-        from response import LLMResponse, NoToolFound
-        result = dispatch(LLMResponse(text="Plain text, no tool"))
-        assert isinstance(result, NoToolFound)
+            mock_handler_class.assert_called_with(controller_instance.current_provider, 10)

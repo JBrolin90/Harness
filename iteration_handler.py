@@ -57,8 +57,56 @@ class LoopDetection:
         )
 
 
+class ConversationState:
+    """Encapsulates conversation history management."""
+    
+    def __init__(self):
+        self.history: list[dict] = []
+    
+    def add_user_message(self, content: str) -> None:
+        self.history.append({"role": "user", "content": content})
+    
+    def add_assistant_message(self, content: str) -> None:
+        self.history.append({"role": "assistant", "content": content})
+    
+    def add_tool_result(self, content: str) -> None:
+        self.history.append({"role": "tool", "content": content})
+    
+    def clean_assistant_text(self, text: str) -> str:
+        """Clean assistant text - remove tool call blocks for display."""
+        if not text:
+            return ""
+        import re
+        # Remove tool call blocks like ```tool_call\n...\n```
+        cleaned = re.sub(r'```tool_call\n[\s\S]*?\n```', '', text)
+        # Remove remaining tool call JSON blocks
+        cleaned = re.sub(r'<tool_call>[\s\S]*?</tool_call>', '', cleaned)
+        return cleaned.strip()
+    
+    @property
+    def messages(self) -> list[dict]:
+        return self.history
+    
+    def get_stats(self) -> str:
+        user = sum(1 for m in self.history if m["role"] == "user")
+        assistant = sum(1 for m in self.history if m["role"] == "assistant")
+        tool = sum(1 for m in self.history if m["role"] == "tool")
+        return f"msgs: {len(self.history)} (u:{user} a:{assistant} t:{tool})"
+    
+    def reset(self) -> None:
+        self.history = []
+
+
 class IterationHandler:
-    """Manages the autonomous tool loop execution and tool dispatch."""
+    """Manages the autonomous tool loop execution and tool dispatch.
+    
+    Encapsulates:
+    - Tool setup and management
+    - Conversation state
+    - LLM calls (initial and loop iterations)
+    - Response formatting and printing
+    - Loop detection
+    """
 
     def __init__(self, provider, max_iterations: int = 25):
         # Tool management
@@ -67,27 +115,65 @@ class IterationHandler:
         provider.tools = tool_manager.tools
         self.tool_engine = tool_manager.tool_engine
         
+        # State
         self.provider = provider
         self.max_iterations = max_iterations
+        self.conversation = ConversationState()
 
-    def execute_loop(
+    def execute(
         self,
-        initial_response: LLMResponse,
-        call_llm,
-        system_prompt,
-        conversation_manager
+        prompt: str,
+        system_prompt: str,
+        call_llm
     ) -> str:
-        """Execute the tool-calling loop until completion or max iterations.
+        """Execute the full task: initial call + tool loop.
         
         Args:
-            initial_response: The first LLM response to process
-            call_llm: Callable that takes (history, system_prompt, config) and returns LLMResponse
-            system_prompt: Current system prompt string
-            conversation_manager: ConversationManager instance for history access
+            prompt: User's prompt
+            system_prompt: System prompt string
+            call_llm: Callable that takes (messages, system_prompt, provider) and returns LLMResponse
             
         Returns:
             Final response text from the model
         """
+        self.conversation.add_user_message(prompt)
+        print(f"\n[Task Started] {self.conversation.get_stats()}")
+
+        # Initial LLM call
+        response = self._call_llm_and_process(
+            self.conversation.messages,
+            system_prompt,
+            call_llm
+        )
+        
+        # If no tool call, we're done
+        if not response.has_tool_calls:
+            return response.text
+
+        # Execute tool loop
+        return self._execute_loop(response, system_prompt, call_llm)
+
+    def _call_llm_and_process(self, messages: list[dict], system_prompt: str, call_llm) -> LLMResponse:
+        """Make LLM call, print response, add to conversation, return response."""
+        print(f"[Thinking with {self.provider.name} / {self.provider.model}...]")
+        response = call_llm(messages, system_prompt, self.provider)
+
+        print(f"[Model response type: {'tool_call' if response.has_tool_calls else 'text'}]")
+        full_text = self.conversation.clean_assistant_text(response.text)
+        if response.has_tool_calls:
+            tool_names = ", ".join(tc.name for tc in response.tool_calls)
+            print(f"Bob: {full_text} [🔧 Calling: {tool_names}]")
+        else:
+            print(f"Bob: {full_text}")
+
+        self.conversation.add_assistant_message(
+            full_text if full_text.strip() else "[Thinking...]"
+        )
+        
+        return response
+
+    def _execute_loop(self, initial_response: LLMResponse, system_prompt: str, call_llm) -> str:
+        """Execute the tool-calling loop until completion or max iterations."""
         response = initial_response
         loop_detection = LoopDetection()
 
@@ -108,36 +194,22 @@ class IterationHandler:
                 print("\n========================== Task stopped due to system error ====================================\n")
                 break
 
-            iteration += 1
             result_str = str(result.output) if result.tool_name == "system" else f"Observation: {str(result.output)}"
-            print(f"\n[Harness feeding result back to Bob... {conversation_manager.get_stats()}]")
+            print(f"\n[Harness feeding result back to Bob... {self.conversation.get_stats()}]")
             print(f"Harness: {result_str}\n")
 
-            conversation_manager.add_tool_result(result_str)
+            self.conversation.add_tool_result(result_str)
 
-            print(f"[Thinking with {self.provider.name} / {self.provider.model}...]")
-            response = call_llm(
-                conversation_manager.messages,
+            response = self._call_llm_and_process(
+                self.conversation.messages,
                 system_prompt,
-                self.provider
+                call_llm
             )
 
-            full_text = conversation_manager.clean_assistant_text(response.text)
-            if response.has_tool_calls:
-                tool_names = ", ".join(tc.name for tc in response.tool_calls)
-                print(f"Bob: {full_text} [🔧 Calling: {tool_names}]")
-            else:
-                print(f"Bob: {full_text}")
-
-            print(f"[Model: {self.provider.model}] {conversation_manager.get_stats()} (iteration {iteration + 1})")
-
-            if full_text.strip() or response.has_tool_calls:
-                content = full_text if full_text.strip() else "[Thinking...]"
-                conversation_manager.add_assistant_message(content)
-
+            print(f"[Model: {self.provider.model}] {self.conversation.get_stats()} (iteration {iteration + 1})")
             print(f"\n================================ End of iteration {iteration + 1} ==========================================\n")
 
-            loop_detection.update(action_sig, full_text, response.has_tool_calls)
+            loop_detection.update(action_sig, self.conversation.clean_assistant_text(response.text), response.has_tool_calls)
         else:
             print(f"\n[WARNING: Task reached maximum iterations ({self.max_iterations}). Stopping safety check.]")
             print("\n========================== Max Iterations Reached ====================================\n")
@@ -154,3 +226,8 @@ class IterationHandler:
         raw_json = extract_json_string(response.text or "")
         raw_bash = parse_bash_command(response.text or "")
         return raw_json or raw_bash
+    
+    @property
+    def conversation_manager(self):
+        """Backwards compat - return wrapped conversation state."""
+        return self.conversation

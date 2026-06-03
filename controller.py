@@ -1,5 +1,4 @@
 """Agent controller with instance-based state for modularity and testability."""
-from conversation import ConversationManager
 from iteration_handler import IterationHandler
 from systemprompt import SystemPromptManager
 from provider import ProviderManager
@@ -7,7 +6,13 @@ from tools.core_config import set_current_provider
 
 
 class HarnessController:
-    """Agent controller with instance-based state for modularity and testability."""
+    """Agent controller - thin orchestrator delegating to specialized components.
+    
+    Responsibilities:
+    - Provider setup
+    - System prompt management
+    - Delegating to IterationHandler for task execution
+    """
 
     def __init__(self, provider_name: str = "cloud-pro", memory_path: str | None = None):
         # Provider
@@ -20,9 +25,6 @@ class HarnessController:
             attributes=self.current_provider.attributes
         )
         
-        # Conversation
-        self.conversation_manager = ConversationManager()
-        
         print("[Config preloaded]")
 
     def run_task(self, prompt: str, max_iterations: int = 25, call_llm=None) -> str:
@@ -31,40 +33,21 @@ class HarnessController:
         call_llm_fn = call_llm or _call_llm
 
         system_prompt = self.system_prompt_manager.get_system_prompt()
-        self.conversation_manager.add_user_message(prompt)
 
-        print(f"\n[Task Started] {self.conversation_manager.get_stats()}")
-
-        # Make LLM call
-        print(f"[Thinking with {self.current_provider.name} / {self.current_provider.model}...]")
-        response = call_llm_fn(
-            self.conversation_manager.messages,
-            system_prompt,
-            self.current_provider
-        )
-
-        # Process and print response
-        print(f"[Model response type: {'tool_call' if response.has_tool_calls else 'text'}]")
-        full_text = self.conversation_manager.clean_assistant_text(response.text)
-        if response.has_tool_calls:
-            tool_names = ", ".join(tc.name for tc in response.tool_calls)
-            print(f"Bob: {full_text} [🔧 Calling: {tool_names}]")
-        else:
-            print(f"Bob: {full_text}")
-
-        self.conversation_manager.add_assistant_message(
-            full_text if full_text.strip() else "[Thinking...]"
-        )
-
-        # Execute tool loop (handles tools setup internally)
+        # Delegate to IterationHandler which encapsulates:
+        # - Tool management
+        # - LLM calls
+        # - Conversation state
+        # - Loop detection
         iteration_handler = IterationHandler(self.current_provider, max_iterations)
-        return iteration_handler.execute_loop(
-            initial_response=response,
-            call_llm=call_llm_fn,
+        return iteration_handler.execute(
+            prompt=prompt,
             system_prompt=system_prompt,
-            conversation_manager=self.conversation_manager
+            call_llm=call_llm_fn
         )
 
     def reset(self) -> None:
         """Clear conversation history to start fresh."""
-        self.conversation_manager.reset()
+        # Controller doesn't own conversation state anymore
+        # Each run_task creates a fresh IterationHandler
+        pass

@@ -80,79 +80,51 @@ class TestHarnessControllerRunTask:
             from controller import HarnessController
             ctrl = HarnessController()
             ctrl.current_provider = MagicMock()
-            ctrl.system_prompt = "Test prompt"
-            ctrl._mock_tool_engine = MagicMock(return_value=NoToolFound())
             yield ctrl
 
-    @patch('brain.call_llm')
-    def test_run_task_returns_response(self, mock_call_llm, controller_instance):
+    @patch('iteration_handler.IterationHandler.execute')
+    def test_run_task_returns_response(self, mock_execute, controller_instance):
         """run_task() should return a response string."""
-        mock_call_llm.return_value = LLMResponse(text="Final response from Bob")
+        mock_execute.return_value = "Final response from Bob"
 
         result = controller_instance.run_task("Hello")
 
         assert result == "Final response from Bob"
 
-    @patch('brain.call_llm')
-    def test_run_task_with_tool_execution(self, mock_call_llm, controller_instance):
+    @patch('iteration_handler.IterationHandler.execute')
+    def test_run_task_with_tool_execution(self, mock_execute, controller_instance):
         """run_task() dispatches tool when response contains tool call."""
-        mock_call_llm.return_value = LLMResponse(text="Done")
-        controller_instance._mock_tool_engine = MagicMock(return_value=NoToolFound())
+        mock_execute.return_value = "Done"
 
-        controller_instance.run_task("Read the file", call_llm=mock_call_llm)
+        controller_instance.run_task("Read the file")
 
-        assert mock_call_llm.call_count == 1
+        mock_execute.assert_called_once()
 
-    @patch('brain.call_llm')
-    def test_run_task_no_tool_exits_loop_immediately(self, mock_call_llm, controller_instance):
-        """run_task() when no tools detected should exit loop after one LLM call."""
-        mock_call_llm.return_value = LLMResponse(text="I understand. How can I help?")
+    @patch('iteration_handler.IterationHandler.execute')
+    def test_run_task_no_tool_exits_loop_immediately(self, mock_execute, controller_instance):
+        """run_task() when no tools detected should exit after execute()."""
+        mock_execute.return_value = "I understand. How can I help?"
 
         controller_instance.run_task("Hello")
 
-        assert mock_call_llm.call_count == 1
-
-    @patch('brain.call_llm')
-    def test_run_task_conversation_history_accumulates(self, mock_call_llm, controller_instance):
-        """Multiple run_task() calls should accumulate in conversation history."""
-        mock_call_llm.return_value = LLMResponse(text="Response")
-
-        controller_instance.run_task("First message")
-        controller_instance.run_task("Second message")
-
-        assert len(controller_instance.conversation_manager.history) == 4
+        mock_execute.assert_called_once()
 
 
 class TestControllerReset:
     """Tests for HarnessController.reset()."""
 
-    @pytest.fixture
-    def controller_instance(self):
-        with patch('controller.ProviderManager') as mock_pm_class:
-            mock_pm_instance = MagicMock()
-            mock_pm_class.return_value = mock_pm_instance
-            mock_provider = MagicMock()
-            mock_provider.provider_type = "minimax"
-            mock_provider.attributes = {}
-            mock_pm_instance.get_provider.return_value = mock_provider
+    @patch('controller.ProviderManager')
+    def test_reset_is_noop(self, mock_pm_class):
+        """reset() is no longer needed - IterationHandler manages conversation state."""
+        mock_pm_instance = MagicMock()
+        mock_pm_class.return_value = mock_pm_instance
+        mock_provider = MagicMock()
+        mock_provider.provider_type = "minimax"
+        mock_provider.attributes = {}
+        mock_pm_instance.get_provider.return_value = mock_provider
 
-            from controller import HarnessController
-            ctrl = HarnessController()
-            yield ctrl
-
-    def test_reset_clears_history(self, controller_instance):
-        """reset() should clear conversation history."""
-        controller_instance.conversation_manager.history = [
-            {"role": "user", "content": "test1"},
-            {"role": "assistant", "content": "test2"}
-        ]
-
-        controller_instance.reset()
-
-        assert controller_instance.conversation_manager.history == []
-
-    def test_reset_preserves_conversation_manager(self, controller_instance):
-        """After reset, conversation_manager should still exist."""
-        controller_instance.reset()
-        assert hasattr(controller_instance, 'conversation_manager')
-        assert hasattr(controller_instance.conversation_manager, 'reset')
+        from controller import HarnessController
+        ctrl = HarnessController()
+        
+        # Should not raise
+        ctrl.reset()
