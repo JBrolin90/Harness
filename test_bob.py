@@ -6,15 +6,15 @@ from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from response import LLMResponse, NoToolFound, ToolResult, ToolCall
+from response import LLMResponse, NoToolFound
 
 
-class TestHarnessControllerImport:
+class TestSessionManagerImport:
     """Tests for importing and basic instantiation."""
 
     @patch('controller.ProviderManager')
-    def test_harness_controller_class_exists(self, mock_pm_class):
-        """HarnessController class should be accessible from controller module."""
+    def test_session_manager_class_exists(self, mock_pm_class):
+        """SessionManager class should be accessible from controller module."""
         mock_pm_instance = MagicMock()
         mock_pm_class.return_value = mock_pm_instance
         mock_provider = MagicMock()
@@ -22,12 +22,12 @@ class TestHarnessControllerImport:
         mock_provider.attributes = {}
         mock_pm_instance.get_provider.return_value = mock_provider
 
-        from controller import HarnessController
-        assert HarnessController is not None
+        from controller import SessionManager
+        assert SessionManager is not None
 
     @patch('controller.ProviderManager')
-    def test_harness_controller_default_provider(self, mock_pm_class):
-        """HarnessController() should default to cloud-pro provider."""
+    def test_session_manager_default_provider(self, mock_pm_class):
+        """SessionManager() should default to cloud-pro provider."""
         mock_pm_instance = MagicMock()
         mock_pm_class.return_value = mock_pm_instance
         mock_provider = MagicMock()
@@ -37,15 +37,15 @@ class TestHarnessControllerImport:
         mock_provider.attributes = {}
         mock_pm_instance.get_provider.return_value = mock_provider
 
-        from controller import HarnessController
-        ctrl = HarnessController()
+        from controller import SessionManager
+        session = SessionManager()
 
         mock_pm_instance.get_provider.assert_called_with("cloud-pro")
-        assert ctrl.current_provider.name == "cloud-pro"
+        assert session.current_provider.name == "cloud-pro"
 
     @patch('controller.ProviderManager')
-    def test_harness_controller_named_provider(self, mock_pm_class):
-        """HarnessController('local-coder') should use specified provider."""
+    def test_session_manager_named_provider(self, mock_pm_class):
+        """SessionManager('local-coder') should use specified provider."""
         mock_pm_instance = MagicMock()
         mock_pm_class.return_value = mock_pm_instance
         mock_provider = MagicMock()
@@ -54,19 +54,19 @@ class TestHarnessControllerImport:
         mock_provider.attributes = {}
         mock_pm_instance.get_provider.return_value = mock_provider
 
-        from controller import HarnessController
-        ctrl = HarnessController("local-coder")
+        from controller import SessionManager
+        session = SessionManager("local-coder")
 
         mock_pm_instance.get_provider.assert_called_with("local-coder")
-        assert ctrl.current_provider.name == "local-coder"
+        assert session.current_provider.name == "local-coder"
 
 
-class TestHarnessControllerRunTask:
-    """Tests for HarnessController.run_task() behavior with LLMResponse."""
+class TestSessionManagerRunTask:
+    """Tests for SessionManager.run_task() behavior."""
 
     @pytest.fixture
-    def controller_instance(self):
-        """Create a mocked controller instance."""
+    def session_instance(self):
+        """Create a mocked session instance."""
         with patch('controller.ProviderManager') as mock_pm_class:
             mock_pm_instance = MagicMock()
             mock_pm_class.return_value = mock_pm_instance
@@ -77,45 +77,36 @@ class TestHarnessControllerRunTask:
             mock_provider.attributes = {}
             mock_pm_instance.get_provider.return_value = mock_provider
 
-            from controller import HarnessController
-            ctrl = HarnessController()
-            ctrl.current_provider = MagicMock()
-            yield ctrl
+            from controller import SessionManager
+            session = SessionManager()
+            session.current_provider = MagicMock()
+            yield session
 
     @patch('iteration_handler.IterationHandler.execute')
-    def test_run_task_returns_response(self, mock_execute, controller_instance):
+    def test_run_task_returns_response(self, mock_execute, session_instance):
         """run_task() should return a response string."""
         mock_execute.return_value = "Final response from Bob"
 
-        result = controller_instance.run_task("Hello")
+        result = session_instance.run_task("Hello")
 
         assert result == "Final response from Bob"
 
     @patch('iteration_handler.IterationHandler.execute')
-    def test_run_task_with_tool_execution(self, mock_execute, controller_instance):
-        """run_task() dispatches tool when response contains tool call."""
+    def test_run_task_calls_execute(self, mock_execute, session_instance):
+        """run_task() dispatches to IterationHandler.execute()."""
         mock_execute.return_value = "Done"
 
-        controller_instance.run_task("Read the file")
-
-        mock_execute.assert_called_once()
-
-    @patch('iteration_handler.IterationHandler.execute')
-    def test_run_task_no_tool_exits_loop_immediately(self, mock_execute, controller_instance):
-        """run_task() when no tools detected should exit after execute()."""
-        mock_execute.return_value = "I understand. How can I help?"
-
-        controller_instance.run_task("Hello")
+        session_instance.run_task("Read the file")
 
         mock_execute.assert_called_once()
 
 
-class TestControllerReset:
-    """Tests for HarnessController.reset()."""
+class TestSessionManagerReset:
+    """Tests for SessionManager.reset()."""
 
     @patch('controller.ProviderManager')
     def test_reset_is_noop(self, mock_pm_class):
-        """reset() is no longer needed - IterationHandler manages conversation state."""
+        """reset() is a no-op."""
         mock_pm_instance = MagicMock()
         mock_pm_class.return_value = mock_pm_instance
         mock_provider = MagicMock()
@@ -123,8 +114,8 @@ class TestControllerReset:
         mock_provider.attributes = {}
         mock_pm_instance.get_provider.return_value = mock_provider
 
-        from controller import HarnessController
-        ctrl = HarnessController()
-        
+        from controller import SessionManager
+        session = SessionManager()
+
         # Should not raise
-        ctrl.reset()
+        session.reset()
