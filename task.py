@@ -123,7 +123,7 @@ class Task:
         self.max_iterations = max_iterations
         self.conversation = ConversationState()
 
-    def execute(self, prompt: str, system_prompt: str, call_llm) -> str:
+    def run(self, prompt: str, system_prompt: str, call_llm) -> str:
         self.conversation.add_user_message(prompt)
         print(f"\n[Task Started] {self.conversation.get_stats()}")
 

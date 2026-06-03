@@ -139,7 +139,7 @@ class TestTask:
         mock_response = LLMResponse(text="I can help with that.")
         mock_call_llm = MagicMock(return_value=mock_response)
         
-        result = handler.execute("Hello", "System prompt", mock_call_llm)
+        result = handler.run("Hello", "System prompt", mock_call_llm)
         
         assert result == "I can help with that."
         mock_call_llm.assert_called_once()
@@ -164,7 +164,7 @@ class TestTask:
         # Mock tool_engine to return NoToolFound on first call
         handler.tool_engine = MagicMock(return_value=NoToolFound())
         
-        result = handler.execute("Read a file", "System prompt", mock_call_llm)
+        result = handler.run("Read a file", "System prompt", mock_call_llm)
         
         assert call_count[0] >= 1  # Check call count on the counter, not the function
 
@@ -195,7 +195,7 @@ class TestTaskIntegration:
         mock_response = LLMResponse(text="Response text")
         mock_call_llm = MagicMock(return_value=mock_response)
         
-        handler.execute("User prompt", "System prompt", mock_call_llm)
+        handler.run("User prompt", "System prompt", mock_call_llm)
         
         # Should have user message and assistant response
         assert len(handler.conversation.history) == 2

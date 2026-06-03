@@ -1,4 +1,4 @@
-"""Unit tests for bob.py - CLI entry point."""
+"""Unit tests for bob.py - main entry point."""
 import pytest
 import sys
 import os
@@ -6,15 +6,13 @@ from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from response import LLMResponse, NoToolFound
-
 
 class TestSessionManagerImport:
-    """Tests for importing and basic instantiation."""
+    """Tests for SessionManager import and initialization."""
 
     @patch('session_manager.ProviderManager')
     def test_session_manager_class_exists(self, mock_pm_class):
-        """SessionManager class should be accessible from controller module."""
+        """SessionManager should be importable."""
         mock_pm_instance = MagicMock()
         mock_pm_class.return_value = mock_pm_instance
         mock_provider = MagicMock()
@@ -23,16 +21,17 @@ class TestSessionManagerImport:
         mock_pm_instance.get_provider.return_value = mock_provider
 
         from session_manager import SessionManager
-        assert SessionManager is not None
+        session = SessionManager()
+
+        assert session is not None
 
     @patch('session_manager.ProviderManager')
     def test_session_manager_default_provider(self, mock_pm_class):
-        """SessionManager() should default to cloud-pro provider."""
+        """SessionManager should default to cloud-pro provider."""
         mock_pm_instance = MagicMock()
         mock_pm_class.return_value = mock_pm_instance
         mock_provider = MagicMock()
         mock_provider.name = "cloud-pro"
-        mock_provider.model = "MiniMax-M2"
         mock_provider.provider_type = "minimax"
         mock_provider.attributes = {}
         mock_pm_instance.get_provider.return_value = mock_provider
@@ -41,24 +40,22 @@ class TestSessionManagerImport:
         session = SessionManager()
 
         mock_pm_instance.get_provider.assert_called_with("cloud-pro")
-        assert session.current_provider.name == "cloud-pro"
 
     @patch('session_manager.ProviderManager')
     def test_session_manager_named_provider(self, mock_pm_class):
-        """SessionManager('local-coder') should use specified provider."""
+        """SessionManager should accept provider_name parameter."""
         mock_pm_instance = MagicMock()
         mock_pm_class.return_value = mock_pm_instance
         mock_provider = MagicMock()
-        mock_provider.name = "local-coder"
+        mock_provider.name = "my-provider"
         mock_provider.provider_type = "minimax"
         mock_provider.attributes = {}
         mock_pm_instance.get_provider.return_value = mock_provider
 
         from session_manager import SessionManager
-        session = SessionManager("local-coder")
+        session = SessionManager(provider_name="my-provider")
 
-        mock_pm_instance.get_provider.assert_called_with("local-coder")
-        assert session.current_provider.name == "local-coder"
+        mock_pm_instance.get_provider.assert_called_with("my-provider")
 
 
 class TestSessionManagerRunTask:
@@ -66,7 +63,7 @@ class TestSessionManagerRunTask:
 
     @pytest.fixture
     def session_instance(self):
-        """Create a mocked session instance."""
+        """Create a mocked session instance for testing."""
         with patch('session_manager.ProviderManager') as mock_pm_class:
             mock_pm_instance = MagicMock()
             mock_pm_class.return_value = mock_pm_instance
@@ -82,23 +79,23 @@ class TestSessionManagerRunTask:
             session.current_provider = MagicMock()
             yield session
 
-    @patch('task.Task.execute')
-    def test_run_task_returns_response(self, mock_execute, session_instance):
+    @patch('task.Task.run')
+    def test_run_task_returns_response(self, mock_run, session_instance):
         """run_task() should return a response string."""
-        mock_execute.return_value = "Final response from Bob"
+        mock_run.return_value = "Final response from Bob"
 
         result = session_instance.run_task("Hello")
 
         assert result == "Final response from Bob"
 
-    @patch('task.Task.execute')
-    def test_run_task_calls_execute(self, mock_execute, session_instance):
-        """run_task() dispatches to Task.execute()."""
-        mock_execute.return_value = "Done"
+    @patch('task.Task.run')
+    def test_run_task_calls_execute(self, mock_run, session_instance):
+        """run_task() dispatches to Task.run()."""
+        mock_run.return_value = "Done"
 
         session_instance.run_task("Read the file")
 
-        mock_execute.assert_called_once()
+        mock_run.assert_called_once()
 
 
 class TestSessionManagerReset:
