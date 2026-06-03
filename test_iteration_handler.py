@@ -115,29 +115,29 @@ class TestTask:
         return provider
 
     @pytest.fixture
-    def mock_tool_engine(self):
+    def mock_execute_tools(self):
         return MagicMock()
 
-    def test_init_sets_up_tool_engine(self, mock_tool_engine):
-        """__init__ should store the tool_engine."""
+    def test_init_sets_up_execute_tools(self, mock_execute_tools):
+        """__init__ should store the execute_tools."""
         
-        handler = Task(mock_tool_engine)
-        assert hasattr(handler, 'tool_engine')
-        assert handler.tool_engine is mock_tool_engine
+        handler = Task(mock_execute_tools)
+        assert hasattr(handler, 'execute_tools')
+        assert handler.execute_tools is mock_execute_tools
 
-    def test_init_creates_conversation_state(self, mock_tool_engine):
+    def test_init_creates_conversation_state(self, mock_execute_tools):
         """__init__ should create ConversationHistory."""
         
-        handler = Task(mock_tool_engine)
+        handler = Task(mock_execute_tools)
         assert hasattr(handler, 'conversation')
         assert hasattr(handler.conversation, 'history')
         assert handler.conversation.history == []
 
-    def test_execute_no_tool_call(self, mock_provider, mock_tool_engine):
+    def test_execute_no_tool_call(self, mock_provider, mock_execute_tools):
         """run should return text immediately if no tool call."""
         from response import LLMResponse
         
-        handler = Task(mock_tool_engine)
+        handler = Task(mock_execute_tools)
         
         mock_response = LLMResponse(text="I can help with that.")
         custom_consult_llm = MagicMock(return_value=mock_response)
@@ -147,11 +147,11 @@ class TestTask:
         assert result == "I can help with that."
         custom_consult_llm.assert_called_once()
 
-    def test_execute_with_tool_call_triggers_loop(self, mock_provider, mock_tool_engine):
+    def test_execute_with_tool_call_triggers_loop(self, mock_provider, mock_execute_tools):
         """run should trigger loop when tool call detected."""
         from response import LLMResponse, NoToolFound
         
-        handler = Task(mock_tool_engine)
+        handler = Task(mock_execute_tools)
         
         response_with_tool = LLMResponse(text='{"name": "read_file"}')
         response_without_tool = LLMResponse(text="Done!")
@@ -163,7 +163,7 @@ class TestTask:
                 return response_with_tool
             return response_without_tool
         
-        mock_tool_engine.return_value = NoToolFound()
+        mock_execute_tools.return_value = NoToolFound()
         
         result = handler.run("Read a file", "System prompt", custom_consult_llm, mock_provider)
         

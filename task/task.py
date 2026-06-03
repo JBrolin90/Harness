@@ -1,14 +1,14 @@
 """Executes a task: initial LLM call + iterations until completion."""
 from task.constants import NO_TEXT_RESPONSE
-from task.tool_engine import ToolEngine
+from task.execute_tools import ExecuteTools
 from session.conversation_history import ConversationHistory
 
 
 class Task:
     """Executes a task: initial LLM call + iterations until completion."""
 
-    def __init__(self, tool_engine: ToolEngine, max_iterations: int = 25):
-        self.tool_engine = tool_engine
+    def __init__(self, execute_tools: ExecuteTools, max_iterations: int = 25):
+        self.execute_tools = execute_tools
         self.max_iterations = max_iterations
         self.conversation = ConversationHistory()
 
@@ -23,7 +23,7 @@ class Task:
             if not response.has_tool_calls:
                 return response.text
 
-            result = self.tool_engine(response)
+            result = self.execute_tools(response)
 
             if not self.conversation.add_tool(result):
                 break
