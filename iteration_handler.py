@@ -38,24 +38,25 @@ class RepetitionDetector:
         self._has_recorded_action: bool = False
 
     def is_repetitive(self, response: LLMResponse, action_sig: str | None) -> bool:
-        if not self._has_recorded_action:
+        if not self._has_recorded_action or self._previous is None:
             return False
 
+        prev = self._previous
         current_had_tool_call = response.has_tool_calls
 
         # Different tool call patterns are not repetition
-        if self._previous.had_tool_call != current_had_tool_call:
+        if prev.had_tool_call != current_had_tool_call:
             return False
 
         # Check for repeated tool call signature
-        if current_had_tool_call and action_sig and self._previous.signature:
-            if action_sig == self._previous.signature:
+        if current_had_tool_call and action_sig and prev.signature:
+            if action_sig == prev.signature:
                 return True
 
         # Check for repeated text response (no tool calls)
-        if not current_had_tool_call and self._previous.assistant_text and response.text:
+        if not current_had_tool_call and prev.assistant_text and response.text:
             current_text = response.text.strip()
-            if current_text and current_text == self._previous.assistant_text.strip():
+            if current_text and current_text == prev.assistant_text.strip():
                 return True
 
         return False
@@ -70,6 +71,10 @@ class RepetitionDetector:
 
 class ConversationState:
     """Manages conversation history."""
+
+    _TOOL_CALL_BLOCK_PATTERN = re.compile(r'```tool_call\n[\s\S]*?\n```')
+    _TOOL_CALL_TAG_PATTERN = re.compile(r'<tool_call>[\s\S]*?</tool_call>')
+
 
     def __init__(self):
         self.history: list[dict] = []
@@ -87,8 +92,8 @@ class ConversationState:
     def clean_assistant_text(text: str) -> str:
         if not text:
             return ""
-        cleaned = re.sub(r'```tool_call\n[\s\S]*?\n```', '', text)
-        cleaned = re.sub(r'<tool_call>[\s\S]*?</tool_call>', '', cleaned)
+        cleaned = ConversationState._TOOL_CALL_BLOCK_PATTERN.sub('', text)
+        cleaned = ConversationState._TOOL_CALL_TAG_PATTERN.sub('', cleaned)
         return cleaned.strip()
 
     @property
@@ -206,7 +211,11 @@ class IterationHandler:
         from tool_dispatch import extract_json_string, parse_bash_command
         raw_json = extract_json_string(response.text or "")
         raw_bash = parse_bash_command(response.text or "")
-        return raw_json or raw_bash
+        
+        result = raw_json or raw_bash
+        if result:
+            return json.dumps(result)
+        return None
 
     @property
     def conversation_manager(self):
