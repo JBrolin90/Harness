@@ -121,22 +121,11 @@ class Task:
         self._provider = provider
         self.conversation.add_user_message(prompt)
         print(f"\n[Task Started] {self.conversation.get_stats()}")
+        return self._agent_loop(system_prompt, call_llm)
 
-        response = self._call_llm_and_process(
-            self.conversation.messages,
-            system_prompt,
-            call_llm,
-            self._provider
-        )
-
-        if not response.has_tool_calls:
-            return response.text
-
-        return self._agent_loop(response, system_prompt, call_llm)
-
-    def _call_llm_and_process(self, messages: list[dict], system_prompt: str, call_llm, provider) -> LLMResponse:
-        print(f"[Thinking with {provider.name} / {provider.model}...]")
-        response = call_llm(messages, system_prompt, provider)
+    def _call_llm_and_process(self, messages: list[dict], system_prompt: str, call_llm) -> LLMResponse:
+        print(f"[Thinking with {self._provider.name} / {self._provider.model}...]")
+        response = call_llm(messages, system_prompt, self._provider)
 
         print(f"[Model response type: {'tool_call' if response.has_tool_calls else 'text'}]")
         full_text = ConversationState.clean_assistant_text(response.text)
@@ -152,9 +141,12 @@ class Task:
 
         return response
 
-    def _agent_loop(self, initial_response: LLMResponse, system_prompt: str, call_llm) -> str:
-        response = initial_response
+    def _agent_loop(self, system_prompt: str, call_llm) -> str:
         repetition_detector = RepetitionDetector()
+        response = self._call_llm_and_process(self.conversation.messages, system_prompt, call_llm)
+        
+        if not response.has_tool_calls:
+            return response.text
 
         for iteration in range(self.max_iterations):
             action_sig = self._compute_action_sig(response)
@@ -182,8 +174,7 @@ class Task:
             response = self._call_llm_and_process(
                 self.conversation.messages,
                 system_prompt,
-                call_llm,
-                self._provider
+                call_llm
             )
 
             print(f"[Model: {self._provider.model}] {self.conversation.get_stats()} (iteration {iteration + 1})")
