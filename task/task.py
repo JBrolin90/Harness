@@ -1,7 +1,7 @@
 """Executes a task: initial LLM call + iterations until completion."""
 from response import ToolResult, SystemError
 
-from task.constants import THINKING_PLACEHOLDER, NO_TEXT_RESPONSE
+from task.constants import NO_TEXT_RESPONSE
 from task.tool_engine import ToolEngine
 from session.conversation_history import ConversationHistory
 from task.repetition_detector import RepetitionDetector, StopReason
@@ -28,11 +28,7 @@ class Task:
             iteration += 1
             response = call_llm(self.conversation.messages, system_prompt, self._provider)
 
-            # Store assistant response
-            clean_text = ConversationHistory.clean_assistant_text(response.text)
-            self.conversation.add_assistant_message(
-                clean_text if clean_text.strip() else THINKING_PLACEHOLDER
-            )
+            self.conversation.add_model_response(response.text)
 
             # Check if we should stop, record for next iteration
             stop = detector.evaluate(response, iteration, self.max_iterations)

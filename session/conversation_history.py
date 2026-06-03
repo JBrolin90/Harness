@@ -1,6 +1,8 @@
 """Manages conversation history."""
 import re
 
+from task.constants import THINKING_PLACEHOLDER
+
 
 class ConversationHistory:
     """Manages conversation history."""
@@ -20,8 +22,13 @@ class ConversationHistory:
     def add_tool_result(self, content: str) -> None:
         self.history.append({"role": "tool", "content": content})
 
+    def add_model_response(self, text: str) -> None:
+        """Add model (assistant) response, stripping tool call artifacts."""
+        cleaned = self._clean_text(text)
+        self.add_assistant_message(cleaned if cleaned.strip() else THINKING_PLACEHOLDER)
+
     @staticmethod
-    def clean_assistant_text(text: str) -> str:
+    def _clean_text(text: str) -> str:
         if not text:
             return ""
         cleaned = ConversationHistory._TOOL_CALL_BLOCK_PATTERN.sub('', text)

@@ -39,7 +39,7 @@ class RepetitionDetector:
         # Record for repetition detection on next iteration
         self.record(
             action_sig,
-            ConversationHistory.clean_assistant_text(response.text),
+            ConversationHistory._clean_text(response.text),
             response.has_tool_calls
         )
 

@@ -36,10 +36,10 @@ class TestConversationHistory:
         conv.add_tool_result("File content here")
         assert conv.history == [{"role": "tool", "content": "File content here"}]
 
-    def test_clean_assistant_text_removes_tool_calls(self):
-        """clean_assistant_text should strip tool call blocks."""
+    def test_clean_text_removes_tool_calls(self):
+        """_clean_text should strip tool call blocks."""
         text = "Some text ```tool_call\n{\"name\": \"foo\"}\n``` more text"
-        cleaned = ConversationHistory.clean_assistant_text(text)
+        cleaned = ConversationHistory._clean_text(text)
         assert "tool_call" not in cleaned
         assert "foo" not in cleaned
 
