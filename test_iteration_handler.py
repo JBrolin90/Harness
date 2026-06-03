@@ -41,9 +41,8 @@ class TestConversationState:
     def test_clean_assistant_text_removes_tool_calls(self):
         """clean_assistant_text should strip tool call blocks."""
         from iteration_handler import ConversationState
-        conv = ConversationState()
         text = "Some text ```tool_call\n{\"name\": \"foo\"}\n``` more text"
-        cleaned = conv.clean_assistant_text(text)
+        cleaned = ConversationState.clean_assistant_text(text)
         assert "tool_call" not in cleaned
         assert "foo" not in cleaned
 
@@ -69,25 +68,24 @@ class TestConversationState:
         assert conv.history == []
 
 
-class TestLoopDetection:
-    """Tests for LoopDetection class."""
+class TestRepetitionDetector:
+    """Tests for RepetitionDetector class."""
 
     def test_no_repetition_on_first_check(self):
-        """check_repetition should return False on first check."""
-        from iteration_handler import LoopDetection
+        """is_repetitive should return False on first check."""
+        from iteration_handler import RepetitionDetector
         from response import LLMResponse
         
-        detection = LoopDetection()
+        detector = RepetitionDetector()
         response = LLMResponse(text="Hello")
-        assert detection.check_repetition(response, None) is False
+        assert detector.is_repetitive(response, None) is False
 
     def test_repetition_detected_for_same_action(self):
-        """check_repetition should detect repeated tool calls."""
-        from iteration_handler import LoopDetection
+        """is_repetitive should detect repeated tool calls."""
+        from iteration_handler import RepetitionDetector
         from response import LLMResponse, ToolCall
         
-        detection = LoopDetection()
-        # Create responses with actual tool_calls list
+        detector = RepetitionDetector()
         response1 = LLMResponse(
             text='{"name": "read_file"}',
             tool_calls=[ToolCall(name="read_file", arguments={"path": "a.txt"})]
@@ -97,21 +95,21 @@ class TestLoopDetection:
             tool_calls=[ToolCall(name="read_file", arguments={"path": "a.txt"})]
         )
         
-        assert response1.has_tool_calls is True  # Verify test setup
-        detection.update("read_file({\"path\":\"a.txt\"})", "action", True)
+        assert response1.has_tool_calls is True
+        detector.record("read_file({\"path\":\"a.txt\"})", "action", True)
         
-        assert detection.check_repetition(response2, "read_file({\"path\":\"a.txt\"})") is True
+        assert detector.is_repetitive(response2, "read_file({\"path\":\"a.txt\"})") is True
 
-    def test_update_records_action(self):
-        """update should record action for next check."""
-        from iteration_handler import LoopDetection
+    def test_record_stores_action(self):
+        """record should store action for next check."""
+        from iteration_handler import RepetitionDetector
         
-        detection = LoopDetection()
-        detection.update("action_sig", "some text", True)
+        detector = RepetitionDetector()
+        detector.record("action_sig", "some text", True)
         
-        assert detection.last_action_sig == "action_sig"
-        assert detection.last_assistant_text == "some text"
-        assert detection.last_had_tool_call is True
+        assert detector._previous.signature == "action_sig"
+        assert detector._previous.assistant_text == "some text"
+        assert detector._previous.had_tool_call is True
 
 
 class TestIterationHandler:

@@ -1,9 +1,20 @@
-"""Iteration handler - manages the autonomous tool loop."""
 import json
+import re
+from dataclasses import dataclass
 from typing import Protocol
 
 from response import LLMResponse, ToolResult, SystemError, NoToolFound
 from tool_manager import ToolManager
+
+
+# Constants for output messages
+SYSTEM_MESSAGE_REPETITION = (
+    "Observation: !!! REPETITION ERROR !!! "
+    "You are repeating yourself. You already have this result in history. "
+    "Look at previous Observations. Provide your Final Answer now or try a DIFFERENT approach."
+)
+THINKING_PLACEHOLDER = "[Thinking...]"
+NO_TEXT_RESPONSE = "[Task completed but no text response received]"
 
 
 class ToolEngine(Protocol):
@@ -11,47 +22,50 @@ class ToolEngine(Protocol):
     def __call__(self, response: LLMResponse) -> ToolResult | SystemError | NoToolFound: ...
 
 
-class LoopDetection:
-    """Tracks action signatures to detect repetitive behavior."""
+@dataclass
+class ActionSignature:
+    """Represents a unique action signature for repetition detection."""
+    signature: str | None
+    assistant_text: str
+    had_tool_call: bool
+
+
+class RepetitionDetector:
+    """Detects repetitive behavior by tracking action signatures."""
 
     def __init__(self):
-        self.last_action_sig: str | None = None
-        self.last_assistant_text: str = ""
-        self.last_had_tool_call: bool = False
+        self._previous: ActionSignature | None = None
         self._has_recorded_action: bool = False
 
-    def check_repetition(self, response: LLMResponse, action_sig: str | None) -> bool:
+    def is_repetitive(self, response: LLMResponse, action_sig: str | None) -> bool:
         if not self._has_recorded_action:
             return False
 
         current_had_tool_call = response.has_tool_calls
 
-        if self.last_had_tool_call != current_had_tool_call:
+        # Different tool call patterns are not repetition
+        if self._previous.had_tool_call != current_had_tool_call:
             return False
 
-        if current_had_tool_call and action_sig and self.last_action_sig:
-            if action_sig == self.last_action_sig:
+        # Check for repeated tool call signature
+        if current_had_tool_call and action_sig and self._previous.signature:
+            if action_sig == self._previous.signature:
                 return True
 
-        if not current_had_tool_call and self.last_assistant_text and response.text:
+        # Check for repeated text response (no tool calls)
+        if not current_had_tool_call and self._previous.assistant_text and response.text:
             current_text = response.text.strip()
-            if current_text and current_text == self.last_assistant_text.strip():
+            if current_text and current_text == self._previous.assistant_text.strip():
                 return True
 
         return False
 
-    def update(self, action_sig: str | None, assistant_text: str, had_tool_call: bool) -> None:
-        self.last_action_sig = action_sig
-        self.last_assistant_text = assistant_text
-        self.last_had_tool_call = had_tool_call
+    def record(self, action_sig: str | None, assistant_text: str, had_tool_call: bool) -> None:
+        self._previous = ActionSignature(action_sig, assistant_text, had_tool_call)
         self._has_recorded_action = True
 
-    def build_repetition_message(self) -> str:
-        return (
-            "Observation: !!! REPETITION ERROR !!! "
-            "You are repeating yourself. You already have this result in history. "
-            "Look at previous Observations. Provide your Final Answer now or try a DIFFERENT approach."
-        )
+    def get_repetition_message(self) -> str:
+        return SYSTEM_MESSAGE_REPETITION
 
 
 class ConversationState:
@@ -69,10 +83,10 @@ class ConversationState:
     def add_tool_result(self, content: str) -> None:
         self.history.append({"role": "tool", "content": content})
 
-    def clean_assistant_text(self, text: str) -> str:
+    @staticmethod
+    def clean_assistant_text(text: str) -> str:
         if not text:
             return ""
-        import re
         cleaned = re.sub(r'```tool_call\n[\s\S]*?\n```', '', text)
         cleaned = re.sub(r'<tool_call>[\s\S]*?</tool_call>', '', cleaned)
         return cleaned.strip()
@@ -124,7 +138,7 @@ class IterationHandler:
         response = call_llm(messages, system_prompt, self.provider)
 
         print(f"[Model response type: {'tool_call' if response.has_tool_calls else 'text'}]")
-        full_text = self.conversation.clean_assistant_text(response.text)
+        full_text = ConversationState.clean_assistant_text(response.text)
         if response.has_tool_calls:
             tool_names = ", ".join(tc.name for tc in response.tool_calls)
             print(f"Bob: {full_text} [🔧 Calling: {tool_names}]")
@@ -132,20 +146,20 @@ class IterationHandler:
             print(f"Bob: {full_text}")
 
         self.conversation.add_assistant_message(
-            full_text if full_text.strip() else "[Thinking...]"
+            full_text if full_text.strip() else THINKING_PLACEHOLDER
         )
 
         return response
 
     def _execute_loop(self, initial_response: LLMResponse, system_prompt: str, call_llm) -> str:
         response = initial_response
-        loop_detection = LoopDetection()
+        repetition_detector = RepetitionDetector()
 
         for iteration in range(self.max_iterations):
             action_sig = self._compute_action_sig(response)
 
-            if loop_detection.check_repetition(response, action_sig):
-                result = ToolResult(tool_name="system", output=loop_detection.build_repetition_message())
+            if repetition_detector.is_repetitive(response, action_sig):
+                result = ToolResult(tool_name="system", output=repetition_detector.get_repetition_message())
             else:
                 result = self.tool_engine(response)
 
@@ -173,12 +187,16 @@ class IterationHandler:
             print(f"[Model: {self.provider.model}] {self.conversation.get_stats()} (iteration {iteration + 1})")
             print(f"\n================================ End of iteration {iteration + 1} ==========================================\n")
 
-            loop_detection.update(action_sig, self.conversation.clean_assistant_text(response.text), response.has_tool_calls)
+            repetition_detector.record(
+                action_sig,
+                ConversationState.clean_assistant_text(response.text),
+                response.has_tool_calls
+            )
         else:
             print(f"\n[WARNING: Task reached maximum iterations ({self.max_iterations}). Stopping safety check.]")
             print("\n========================== Max Iterations Reached ====================================\n")
 
-        return response.text if response.text else "[Task completed but no text response received]"
+        return response.text if response.text else NO_TEXT_RESPONSE
 
     def _compute_action_sig(self, response: LLMResponse) -> str | None:
         if response.first_tool_call:
