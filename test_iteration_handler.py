@@ -6,7 +6,7 @@ from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from task.task import ConversationHistory, RepetitionDetector, Task
+from task.task import Task; from session.conversation_history import ConversationHistory; from task.repetition_detector import RepetitionDetector
 
 
 class TestConversationHistory:

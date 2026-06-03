@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 class TestSessionManagerImport:
     """Tests for SessionManager import and initialization."""
 
-    @patch('session_manager.ProviderManager')
+    @patch('session.session_manager.ProviderManager')
     def test_session_manager_class_exists(self, mock_pm_class):
         """SessionManager should be importable."""
         mock_pm_instance = MagicMock()
@@ -20,12 +20,12 @@ class TestSessionManagerImport:
         mock_provider.attributes = {}
         mock_pm_instance.get_provider.return_value = mock_provider
 
-        from session_manager import SessionManager
+        from session.session_manager import SessionManager
         session = SessionManager()
 
         assert session is not None
 
-    @patch('session_manager.ProviderManager')
+    @patch('session.session_manager.ProviderManager')
     def test_session_manager_default_provider(self, mock_pm_class):
         """SessionManager should default to cloud-pro provider."""
         mock_pm_instance = MagicMock()
@@ -36,12 +36,12 @@ class TestSessionManagerImport:
         mock_provider.attributes = {}
         mock_pm_instance.get_provider.return_value = mock_provider
 
-        from session_manager import SessionManager
+        from session.session_manager import SessionManager
         session = SessionManager()
 
         mock_pm_instance.get_provider.assert_called_with("cloud-pro")
 
-    @patch('session_manager.ProviderManager')
+    @patch('session.session_manager.ProviderManager')
     def test_session_manager_named_provider(self, mock_pm_class):
         """SessionManager should accept provider_name parameter."""
         mock_pm_instance = MagicMock()
@@ -52,7 +52,7 @@ class TestSessionManagerImport:
         mock_provider.attributes = {}
         mock_pm_instance.get_provider.return_value = mock_provider
 
-        from session_manager import SessionManager
+        from session.session_manager import SessionManager
         session = SessionManager(provider_name="my-provider")
 
         mock_pm_instance.get_provider.assert_called_with("my-provider")
@@ -64,7 +64,7 @@ class TestSessionManagerRunTask:
     @pytest.fixture
     def session_instance(self):
         """Create a mocked session instance for testing."""
-        with patch('session_manager.ProviderManager') as mock_pm_class:
+        with patch('session.session_manager.ProviderManager') as mock_pm_class:
             mock_pm_instance = MagicMock()
             mock_pm_class.return_value = mock_pm_instance
             mock_provider = MagicMock()
@@ -74,7 +74,7 @@ class TestSessionManagerRunTask:
             mock_provider.attributes = {}
             mock_pm_instance.get_provider.return_value = mock_provider
 
-            from session_manager import SessionManager
+            from session.session_manager import SessionManager
             session = SessionManager()
             session.current_provider = MagicMock()
             yield session
@@ -101,7 +101,7 @@ class TestSessionManagerRunTask:
 class TestSessionManagerReset:
     """Tests for SessionManager.reset()."""
 
-    @patch('session_manager.ProviderManager')
+    @patch('session.session_manager.ProviderManager')
     def test_reset_is_noop(self, mock_pm_class):
         """reset() is a no-op."""
         mock_pm_instance = MagicMock()
@@ -111,7 +111,7 @@ class TestSessionManagerReset:
         mock_provider.attributes = {}
         mock_pm_instance.get_provider.return_value = mock_provider
 
-        from session_manager import SessionManager
+        from session.session_manager import SessionManager
         session = SessionManager()
 
         # Should not raise

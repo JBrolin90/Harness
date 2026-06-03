@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 class TestSessionManagerInit:
     """Tests for SessionManager.__init__()"""
 
-    @patch('session_manager.ProviderManager')
+    @patch('session.session_manager.ProviderManager')
     def test_init_creates_instance_state(self, mock_pm_class):
         """__init__() should create instance attributes."""
         mock_pm_instance = MagicMock()
@@ -21,13 +21,13 @@ class TestSessionManagerInit:
         mock_provider.attributes = {}
         mock_pm_instance.get_provider.return_value = mock_provider
 
-        from session_manager import SessionManager
+        from session.session_manager import SessionManager
         session = SessionManager()
 
         assert hasattr(session, 'current_provider')
         assert hasattr(session, 'system_prompt_manager')
 
-    @patch('session_manager.ProviderManager')
+    @patch('session.session_manager.ProviderManager')
     def test_init_creates_system_prompt_manager(self, mock_pm_class):
         """__init__() should create SystemPromptManager."""
         mock_pm_instance = MagicMock()
@@ -37,7 +37,7 @@ class TestSessionManagerInit:
         mock_provider.attributes = {}
         mock_pm_instance.get_provider.return_value = mock_provider
 
-        from session_manager import SessionManager
+        from session.session_manager import SessionManager
         session = SessionManager()
 
         assert hasattr(session, 'system_prompt_manager')
@@ -50,7 +50,7 @@ class TestSessionManagerRunTask:
     @pytest.fixture
     def session_instance(self):
         """Create a mocked session instance for testing."""
-        with patch('session_manager.ProviderManager') as mock_pm_class:
+        with patch('session.session_manager.ProviderManager') as mock_pm_class:
             mock_pm_instance = MagicMock()
             mock_pm_class.return_value = mock_pm_instance
             mock_provider = MagicMock()
@@ -60,12 +60,12 @@ class TestSessionManagerRunTask:
             mock_provider.attributes = {}
             mock_pm_instance.get_provider.return_value = mock_provider
 
-            from session_manager import SessionManager
+            from session.session_manager import SessionManager
             session = SessionManager()
             session.current_provider = MagicMock()
             yield session
 
-    @patch('session_manager.Task')
+    @patch('session.session_manager.Task')
     def test_run_task_returns_run_result(self, mock_task_class, session_instance):
         """run_task() should return the result from Task.run()."""
         mock_task_instance = MagicMock()
@@ -77,7 +77,7 @@ class TestSessionManagerRunTask:
         assert result == "Final answer"
         mock_task_instance.run.assert_called_once()
 
-    @patch('session_manager.Task')
+    @patch('session.session_manager.Task')
     def test_run_task_passes_parameters_to_run(self, mock_task_class, session_instance):
         """run_task() should pass prompt and system_prompt to run."""
         mock_task_instance = MagicMock()
@@ -93,7 +93,7 @@ class TestSessionManagerRunTask:
         assert 'call_llm' in call_kwargs
         assert 'provider' in call_kwargs
 
-    @patch('session_manager.Task')
+    @patch('session.session_manager.Task')
     def test_run_task_with_custom_call_llm(self, mock_task_class, session_instance):
         """run_task() should pass custom call_llm to run."""
         mock_task_instance = MagicMock()
@@ -107,8 +107,8 @@ class TestSessionManagerRunTask:
         call_kwargs = mock_task_instance.run.call_args.kwargs
         assert call_kwargs['call_llm'] is custom_call_llm
 
-    @patch('session_manager.ToolManager')
-    @patch('session_manager.Task')
+    @patch('session.session_manager.ToolManager')
+    @patch('session.session_manager.Task')
     def test_run_task_with_max_iterations(self, mock_task_class, mock_tm_class, session_instance):
         """run_task() should pass max_iterations to Task constructor."""
         mock_task_instance = MagicMock()

@@ -5,7 +5,7 @@ from response import LLMResponse, ToolResult, SystemError
 
 from task.constants import THINKING_PLACEHOLDER, NO_TEXT_RESPONSE
 from task.tool_engine import ToolEngine
-from task.conversation_history import ConversationHistory
+from session.conversation_history import ConversationHistory
 from task.repetition_detector import RepetitionDetector
 
 
