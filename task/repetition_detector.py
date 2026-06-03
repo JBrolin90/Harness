@@ -1,4 +1,6 @@
 """Detects repetitive behavior by tracking action signatures."""
+import json
+
 from response import LLMResponse
 
 from task.constants import SYSTEM_MESSAGE_REPETITION
@@ -42,3 +44,19 @@ class RepetitionDetector:
 
     def get_repetition_message(self) -> str:
         return SYSTEM_MESSAGE_REPETITION
+
+    @staticmethod
+    def compute_signature(response: LLMResponse) -> str | None:
+        """Compute unique signature for a response to detect repetition."""
+        if response.first_tool_call:
+            tc = response.first_tool_call
+            return f"{tc.name}({json.dumps(tc.arguments, sort_keys=True)})"
+
+        from tool_dispatch import extract_json_string, parse_bash_command
+        raw_json = extract_json_string(response.text or "")
+        raw_bash = parse_bash_command(response.text or "")
+
+        result = raw_json or raw_bash
+        if result:
+            return json.dumps(result)
+        return None

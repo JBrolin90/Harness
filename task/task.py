@@ -1,6 +1,4 @@
 """Executes a task: initial LLM call + iterations until completion."""
-import json
-
 from response import LLMResponse, ToolResult, SystemError
 
 from task.constants import THINKING_PLACEHOLDER, NO_TEXT_RESPONSE
@@ -39,8 +37,8 @@ class Task:
             if not response.has_tool_calls:
                 return response.text
 
-            action_sig = self._compute_action_sig(response)
-
+            action_sig = RepetitionDetector.compute_signature(response)
+            
             if repetition_detector.is_repetitive(response, action_sig):
                 result = ToolResult(tool_name="system", output=repetition_detector.get_repetition_message())
             else:
@@ -64,20 +62,6 @@ class Task:
             )
 
         return response.text if response.text else NO_TEXT_RESPONSE
-
-    def _compute_action_sig(self, response: LLMResponse) -> str | None:
-        if response.first_tool_call:
-            tc = response.first_tool_call
-            return f"{tc.name}({json.dumps(tc.arguments, sort_keys=True)})"
-
-        from tool_dispatch import extract_json_string, parse_bash_command
-        raw_json = extract_json_string(response.text or "")
-        raw_bash = parse_bash_command(response.text or "")
-
-        result = raw_json or raw_bash
-        if result:
-            return json.dumps(result)
-        return None
 
     @property
     def conversation_manager(self):
