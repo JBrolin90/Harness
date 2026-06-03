@@ -7,7 +7,7 @@ from response import LLMResponse, ToolResult, SystemError, NoToolFound
 
 
 # Type alias for the tool engine function signature
-ToolEngine = Callable[[LLMResponse], ToolResult | SystemError | NoToolFound]
+ToolEngine = Callable[[LLMResponse], ToolResult | SystemError]
 
 
 class ToolManager:

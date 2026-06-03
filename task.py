@@ -3,7 +3,7 @@ import re
 from dataclasses import dataclass
 from typing import Protocol
 
-from response import LLMResponse, ToolResult, SystemError, NoToolFound
+from response import LLMResponse, ToolResult, SystemError
 
 
 # Constants for output messages
@@ -18,7 +18,7 @@ NO_TEXT_RESPONSE = "[Task completed but no text response received]"
 
 class ToolEngine(Protocol):
     """Protocol for tool execution engines."""
-    def __call__(self, response: LLMResponse) -> ToolResult | SystemError | NoToolFound: ...
+    def __call__(self, response: LLMResponse) -> ToolResult | SystemError: ...
 
 
 @dataclass
@@ -163,16 +163,11 @@ class Task:
             else:
                 result = self.tool_engine(response)
 
-            if isinstance(result, NoToolFound):
-                print(f"\n========================== End of task after {iteration} iterations ====================================\n")
-                break
+            if result.tool_name == "system":
+                result_str = str(result.output)
+            else:
+                result_str = f"Observation: {str(result.output)}"
 
-            if isinstance(result, SystemError):
-                print(f"\n[SYSTEM ERROR] {result.message}")
-                print("\n========================== Task stopped due to system error ====================================\n")
-                break
-
-            result_str = str(result.output) if result.tool_name == "system" else f"Observation: {str(result.output)}"
             print(f"\n[Harness feeding result back to Bob... {self.conversation.get_stats()}]")
             print(f"Harness: {result_str}\n")
 
