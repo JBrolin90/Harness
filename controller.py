@@ -86,16 +86,18 @@ class HarnessController:
             self._last_memory_content = current_memory
         return self._cached_system_prompt
 
-    def run_task(self, prompt: str, max_iterations: int = 25) -> str:
+    def run_task(self, prompt: str, max_iterations: int = 25, call_llm=None) -> str:
         """Execute a task with the given prompt. Returns the final response."""
+        from brain import call_llm as _call_llm
+        call_llm_fn = call_llm or _call_llm
+
         self.system_prompt = self._get_cached_system_prompt()
         self.conversation_manager.add_user_message(prompt)
 
         print(f"\n[Task Started] {self.conversation_manager.get_stats()}")
 
         # Get initial response
-        from brain import call_llm
-        response = self._get_llm_response()
+        response = self._get_llm_response(call_llm_fn)
 
         # Process response
         full_text = self.conversation_manager.clean_assistant_text(response.text)
@@ -108,16 +110,17 @@ class HarnessController:
         iteration_handler = IterationHandler(self.tool_engine, max_iterations)
         return iteration_handler.execute_loop(
             initial_response=response,
-            call_llm=call_llm,
+            call_llm=call_llm_fn,
             system_prompt_provider=self,
             conversation_manager=self.conversation_manager
         )
 
-    def _get_llm_response(self) -> LLMResponse:
+    def _get_llm_response(self, call_llm_fn=None) -> LLMResponse:
         """Make an LLM call."""
-        from brain import call_llm
+        from brain import call_llm as _call_llm
+        fn = call_llm_fn or _call_llm
         print(f"[Thinking with {self.current_provider.name} / {self.current_provider.model}...]")
-        return call_llm(
+        return fn(
             self.conversation_manager.messages,
             self.system_prompt,
             self.current_provider
@@ -152,33 +155,3 @@ class HarnessController:
     def reset(self) -> None:
         """Clear conversation history to start fresh."""
         self.conversation_manager.reset()
-
-
-# Module-level convenience for backward compatibility with existing CLI usage
-_controller: HarnessController | None = None
-
-
-def init(provider_name: str = "cloud-pro"):
-    """Initialize the global controller instance."""
-    global _controller
-    _controller = HarnessController(provider_name)
-
-
-def run_task(prompt: str) -> str:
-    """Run task using the global controller instance."""
-    if _controller is None:
-        raise RuntimeError("Controller not initialized. Call init() first.")
-    return _controller.run_task(prompt)
-
-
-if __name__ == "__main__":
-    init()
-    while True:
-        try:
-            prompt = input("You: ")
-            if prompt.lower() in ("exit", "quit"):
-                break
-            run_task(prompt)
-        except KeyboardInterrupt:
-            print("\n[Exiting]")
-            break

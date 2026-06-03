@@ -16,19 +16,49 @@ class LoopDetection:
     def __init__(self):
         self.last_action_sig: str | None = None
         self.last_assistant_text: str = ""
+        self.last_had_tool_call: bool = False
+        self._has_recorded_action: bool = False  # Track if we've recorded a valid action
 
     def check_repetition(self, response: LLMResponse, action_sig: str | None) -> bool:
-        """Detect if the model is repeating itself."""
-        if action_sig and action_sig == self.last_action_sig:
-            return True
-        if response.text and response.text.strip() == self.last_assistant_text.strip():
-            return True
+        """Detect if the model is repeating itself.
+        
+        Avoids false positives when switching between tool calls and text responses.
+        A repetition only counts if we're in the same "mode" (tool call vs text).
+        Only checks after we've recorded at least one valid action to avoid false positives
+        from initial None values.
+        """
+        # Only check for repetition after we've recorded at least one action
+        if not self._has_recorded_action:
+            return False
+        
+        current_had_tool_call = response.has_tool_calls
+        
+        # If switching modes, not a repetition
+        if self.last_had_tool_call != current_had_tool_call:
+            return False
+        
+        # Both were tool calls - check action signature (and both must be non-None)
+        if current_had_tool_call and action_sig and self.last_action_sig:
+            if action_sig == self.last_action_sig:
+                return True
+        
+        # Both were text responses - check for repeated text
+        # Only consider non-empty text as a possible repetition
+        if not current_had_tool_call and self.last_assistant_text and response.text:
+            current_text = response.text.strip()
+            if current_text and current_text == self.last_assistant_text.strip():
+                return True
+                
         return False
 
-    def update(self, action_sig: str | None, assistant_text: str) -> None:
+    def update(self, action_sig: str | None, assistant_text: str, had_tool_call: bool) -> None:
         """Update tracking state after each iteration."""
         self.last_action_sig = action_sig
         self.last_assistant_text = assistant_text
+        self.last_had_tool_call = had_tool_call
+        # Mark that we've recorded at least one action
+        # (even if this action_sig is None, we've gone through a loop iteration)
+        self._has_recorded_action = True
 
     def build_repetition_message(self) -> str:
         """Build a message to guide the model out of repetition."""
@@ -95,7 +125,8 @@ class IterationHandler:
 
             conversation_manager.add_tool_result(result_str)
 
-            print(f"[Thinking with {system_prompt_provider.provider_name} / {system_prompt_provider.model}...]")
+            provider = system_prompt_provider.current_provider
+            print(f"[Thinking with {provider.name} / {provider.model}...]")
             response = call_llm(
                 conversation_manager.messages,
                 system_prompt_provider.system_prompt,
@@ -110,7 +141,7 @@ class IterationHandler:
             else:
                 print(f"Bob: {full_text}")
 
-            print(f"[Model: {system_prompt_provider.model}] {conversation_manager.get_stats()} (iteration {iteration + 1})")
+            print(f"[Model: {system_prompt_provider.current_provider.model}] {conversation_manager.get_stats()} (iteration {iteration + 1})")
 
             # Record assistant turn
             if full_text.strip() or response.has_tool_calls:
@@ -120,7 +151,7 @@ class IterationHandler:
             print(f"\n================================ End of iteration {iteration + 1} ==========================================\n")
 
             # Update loop detection
-            loop_detection.update(action_sig, full_text)
+            loop_detection.update(action_sig, full_text, response.has_tool_calls)
         else:
             print(f"\n[WARNING: Task reached maximum iterations ({self.max_iterations}). Stopping safety check.]")
             print("\n========================== Max Iterations Reached ====================================\n")
