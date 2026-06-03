@@ -163,10 +163,11 @@ class Task:
             else:
                 result = self.tool_engine(response)
 
-            if result.tool_name == "system":
-                result_str = str(result.output)
-            else:
-                result_str = f"Observation: {str(result.output)}"
+            match result:
+                case ToolResult() as r:
+                    result_str = str(r.output) if r.tool_name == "system" else f"Observation: {str(r.output)}"
+                case SystemError() as e:
+                    result_str = str(e)
 
             print(f"\n[Harness feeding result back to Bob... {self.conversation.get_stats()}]")
             print(f"Harness: {result_str}\n")
