@@ -169,12 +169,6 @@ class TestTask:
         
         assert call_count[0] >= 1
 
-    def test_conversation_manager_backwards_compat(self, mock_tool_engine):
-        """conversation_manager property should return conversation."""
-        
-        handler = Task(mock_tool_engine)
-        assert handler.conversation_manager is handler.conversation
-
 
 class TestTaskIntegration:
     """Integration tests for Task with real components."""

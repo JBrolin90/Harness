@@ -29,8 +29,3 @@ class Task:
                 break
 
         return response.text if response.text else NO_TEXT_RESPONSE
-
-    @property
-    def conversation_manager(self):
-        """Backwards compat - return wrapped conversation state."""
-        return self.conversation
