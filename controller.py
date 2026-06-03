@@ -1,7 +1,6 @@
 """Agent controller with instance-based state for modularity and testability."""
 from conversation import ConversationManager
 from iteration_handler import IterationHandler
-from tool_manager import ToolManager
 from systemprompt import SystemPromptManager
 from provider import ProviderManager
 from tools.core_config import set_current_provider
@@ -15,7 +14,6 @@ class HarnessController:
         # Provider
         self.current_provider = ProviderManager().get_provider(provider_name)
         set_current_provider(self.current_provider)
-        self.current_provider.tools = self._setup_tools()
         
         # Memory & system prompt
         self.memory = get_memory()
@@ -28,13 +26,6 @@ class HarnessController:
         self.conversation_manager = ConversationManager()
         
         print("[Config preloaded]")
-
-    def _setup_tools(self) -> list[dict]:
-        """Build and configure tools for the provider."""
-        tool_manager = ToolManager()
-        tool_manager.setup(self.current_provider.attributes)
-        self.tool_manager = tool_manager
-        return tool_manager.tools
 
     def run_task(self, prompt: str, max_iterations: int = 25, call_llm=None) -> str:
         """Execute a task with the given prompt. Returns the final response."""
@@ -67,12 +58,12 @@ class HarnessController:
             full_text if full_text.strip() else "[Thinking...]"
         )
 
-        # Execute tool loop
-        iteration_handler = IterationHandler(self.tool_manager.tool_engine, max_iterations)
+        # Execute tool loop (handles tools setup internally)
+        iteration_handler = IterationHandler(self.current_provider, max_iterations)
         return iteration_handler.execute_loop(
             initial_response=response,
             call_llm=call_llm_fn,
-            system_prompt_provider=self,
+            system_prompt=system_prompt,
             conversation_manager=self.conversation_manager
         )
 

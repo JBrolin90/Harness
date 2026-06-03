@@ -3,6 +3,7 @@ import json
 from typing import Protocol
 
 from response import LLMResponse, ToolResult, SystemError, NoToolFound
+from tool_manager import ToolManager
 
 
 class ToolEngine(Protocol):
@@ -17,33 +18,22 @@ class LoopDetection:
         self.last_action_sig: str | None = None
         self.last_assistant_text: str = ""
         self.last_had_tool_call: bool = False
-        self._has_recorded_action: bool = False  # Track if we've recorded a valid action
+        self._has_recorded_action: bool = False
 
     def check_repetition(self, response: LLMResponse, action_sig: str | None) -> bool:
-        """Detect if the model is repeating itself.
-        
-        Avoids false positives when switching between tool calls and text responses.
-        A repetition only counts if we're in the same "mode" (tool call vs text).
-        Only checks after we've recorded at least one valid action to avoid false positives
-        from initial None values.
-        """
-        # Only check for repetition after we've recorded at least one action
+        """Detect if the model is repeating itself."""
         if not self._has_recorded_action:
             return False
         
         current_had_tool_call = response.has_tool_calls
         
-        # If switching modes, not a repetition
         if self.last_had_tool_call != current_had_tool_call:
             return False
         
-        # Both were tool calls - check action signature (and both must be non-None)
         if current_had_tool_call and action_sig and self.last_action_sig:
             if action_sig == self.last_action_sig:
                 return True
         
-        # Both were text responses - check for repeated text
-        # Only consider non-empty text as a possible repetition
         if not current_had_tool_call and self.last_assistant_text and response.text:
             current_text = response.text.strip()
             if current_text and current_text == self.last_assistant_text.strip():
@@ -56,8 +46,6 @@ class LoopDetection:
         self.last_action_sig = action_sig
         self.last_assistant_text = assistant_text
         self.last_had_tool_call = had_tool_call
-        # Mark that we've recorded at least one action
-        # (even if this action_sig is None, we've gone through a loop iteration)
         self._has_recorded_action = True
 
     def build_repetition_message(self) -> str:
@@ -70,17 +58,23 @@ class LoopDetection:
 
 
 class IterationHandler:
-    """Manages the autonomous tool loop execution."""
+    """Manages the autonomous tool loop execution and tool dispatch."""
 
-    def __init__(self, tool_engine: ToolEngine, max_iterations: int = 25):
-        self.tool_engine = tool_engine
+    def __init__(self, provider, max_iterations: int = 25):
+        # Tool management
+        tool_manager = ToolManager()
+        tool_manager.setup(provider.attributes)
+        provider.tools = tool_manager.tools
+        self.tool_engine = tool_manager.tool_engine
+        
+        self.provider = provider
         self.max_iterations = max_iterations
 
     def execute_loop(
         self,
         initial_response: LLMResponse,
         call_llm,
-        system_prompt_provider,
+        system_prompt,
         conversation_manager
     ) -> str:
         """Execute the tool-calling loop until completion or max iterations.
@@ -88,7 +82,7 @@ class IterationHandler:
         Args:
             initial_response: The first LLM response to process
             call_llm: Callable that takes (history, system_prompt, config) and returns LLMResponse
-            system_prompt_provider: Callable that returns the current system prompt
+            system_prompt: Current system prompt string
             conversation_manager: ConversationManager instance for history access
             
         Returns:
@@ -98,16 +92,13 @@ class IterationHandler:
         loop_detection = LoopDetection()
 
         for iteration in range(self.max_iterations):
-            # Calculate current action signature
             action_sig = self._compute_action_sig(response)
 
-            # Check for repetition
             if loop_detection.check_repetition(response, action_sig):
                 result = ToolResult(tool_name="system", output=loop_detection.build_repetition_message())
             else:
                 result = self.tool_engine(response)
 
-            # Handle termination conditions
             if isinstance(result, NoToolFound):
                 print(f"\n========================== End of task after {iteration} iterations ====================================\n")
                 break
@@ -117,7 +108,6 @@ class IterationHandler:
                 print("\n========================== Task stopped due to system error ====================================\n")
                 break
 
-            # Tool executed successfully - feed result back and get next response
             iteration += 1
             result_str = str(result.output) if result.tool_name == "system" else f"Observation: {str(result.output)}"
             print(f"\n[Harness feeding result back to Bob... {conversation_manager.get_stats()}]")
@@ -125,15 +115,13 @@ class IterationHandler:
 
             conversation_manager.add_tool_result(result_str)
 
-            provider = system_prompt_provider.current_provider
-            print(f"[Thinking with {provider.name} / {provider.model}...]")
+            print(f"[Thinking with {self.provider.name} / {self.provider.model}...]")
             response = call_llm(
                 conversation_manager.messages,
-                system_prompt_provider.system_prompt,
-                system_prompt_provider
+                system_prompt,
+                self.provider
             )
 
-            # Print response
             full_text = conversation_manager.clean_assistant_text(response.text)
             if response.has_tool_calls:
                 tool_names = ", ".join(tc.name for tc in response.tool_calls)
@@ -141,16 +129,14 @@ class IterationHandler:
             else:
                 print(f"Bob: {full_text}")
 
-            print(f"[Model: {system_prompt_provider.current_provider.model}] {conversation_manager.get_stats()} (iteration {iteration + 1})")
+            print(f"[Model: {self.provider.model}] {conversation_manager.get_stats()} (iteration {iteration + 1})")
 
-            # Record assistant turn
             if full_text.strip() or response.has_tool_calls:
                 content = full_text if full_text.strip() else "[Thinking...]"
                 conversation_manager.add_assistant_message(content)
 
             print(f"\n================================ End of iteration {iteration + 1} ==========================================\n")
 
-            # Update loop detection
             loop_detection.update(action_sig, full_text, response.has_tool_calls)
         else:
             print(f"\n[WARNING: Task reached maximum iterations ({self.max_iterations}). Stopping safety check.]")
@@ -160,12 +146,10 @@ class IterationHandler:
 
     def _compute_action_sig(self, response: LLMResponse) -> str | None:
         """Compute action signature for loop detection."""
-        # Structured tool call
         if response.first_tool_call:
             tc = response.first_tool_call
             return f"{tc.name}({json.dumps(tc.arguments, sort_keys=True)})"
 
-        # Text-based extraction for smaller models
         from tool_dispatch import extract_json_string, parse_bash_command
         raw_json = extract_json_string(response.text or "")
         raw_bash = parse_bash_command(response.text or "")

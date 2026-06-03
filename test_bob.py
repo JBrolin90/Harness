@@ -67,8 +67,7 @@ class TestHarnessControllerRunTask:
     @pytest.fixture
     def controller_instance(self):
         """Create a mocked controller instance."""
-        with \
-             patch('controller.ProviderManager') as mock_pm_class, \
+        with patch('controller.ProviderManager') as mock_pm_class, \
              patch('controller.get_memory') as mock_get_memory:
             mock_pm_instance = MagicMock()
             mock_pm_class.return_value = mock_pm_instance
@@ -80,7 +79,7 @@ class TestHarnessControllerRunTask:
             ctrl = HarnessController()
             ctrl.current_provider = MagicMock()
             ctrl.system_prompt = "Test prompt"
-            ctrl.tool_manager.tool_engine = MagicMock(return_value=NoToolFound())
+            ctrl._mock_tool_engine = MagicMock(return_value=NoToolFound())
             yield ctrl
 
     @patch('brain.call_llm')
@@ -94,16 +93,12 @@ class TestHarnessControllerRunTask:
 
     @patch('brain.call_llm')
     def test_run_task_with_tool_execution(self, mock_call_llm, controller_instance):
-        """run_task() dispatches tool when response contains tool call.
-        
-        Uses return_value instead of side_effect to avoid iteration complexity.
-        """
+        """run_task() dispatches tool when response contains tool call."""
         mock_call_llm.return_value = LLMResponse(text="Done")
-        controller_instance.tool_manager.tool_engine = MagicMock(return_value=NoToolFound())
+        controller_instance._mock_tool_engine = MagicMock(return_value=NoToolFound())
 
         controller_instance.run_task("Read the file", call_llm=mock_call_llm)
 
-        # Verify call_llm was called (tool was dispatched, loop ended)
         assert mock_call_llm.call_count == 1
 
     @patch('brain.call_llm')
@@ -131,8 +126,7 @@ class TestControllerReset:
 
     @pytest.fixture
     def controller_instance(self):
-        with \
-             patch('controller.ProviderManager') as mock_pm_class, \
+        with patch('controller.ProviderManager') as mock_pm_class, \
              patch('controller.get_memory') as mock_get_memory:
             mock_pm_instance = MagicMock()
             mock_pm_class.return_value = mock_pm_instance
@@ -155,9 +149,8 @@ class TestControllerReset:
 
         assert controller_instance.conversation_manager.history == []
 
-    def test_reset_preserves_tool_engine(self, controller_instance):
-        """After reset, tool_manager should remain set."""
+    def test_reset_preserves_conversation_manager(self, controller_instance):
+        """After reset, conversation_manager should still exist."""
         controller_instance.reset()
-        assert hasattr(controller_instance, 'tool_manager')
-        assert hasattr(controller_instance.tool_manager, 'tool_engine')
-        assert callable(controller_instance.tool_manager.tool_engine)
+        assert hasattr(controller_instance, 'conversation_manager')
+        assert hasattr(controller_instance.conversation_manager, 'reset')

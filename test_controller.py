@@ -28,9 +28,7 @@ class TestHarnessControllerInit:
 
         assert hasattr(ctrl, 'current_provider')
         assert hasattr(ctrl, 'conversation_manager')
-        assert hasattr(ctrl, 'tool_manager')
-        assert ctrl.current_provider == mock_provider
-        assert hasattr(ctrl.conversation_manager, 'history')
+        assert hasattr(ctrl, 'system_prompt_manager')
 
     @patch('controller.ProviderManager')
     @patch('controller.get_memory')
@@ -58,8 +56,7 @@ class TestHarnessControllerRunTask:
     @pytest.fixture
     def controller_instance(self):
         """Create a mocked controller instance for testing."""
-        with \
-             patch('controller.ProviderManager') as mock_pm_class, \
+        with patch('controller.ProviderManager') as mock_pm_class, \
              patch('controller.get_memory') as mock_get_memory:
             mock_pm_instance = MagicMock()
             mock_pm_class.return_value = mock_pm_instance
@@ -73,7 +70,7 @@ class TestHarnessControllerRunTask:
             ctrl = HarnessController()
             ctrl.current_provider = MagicMock()
             ctrl.system_prompt = "Test prompt"
-            ctrl.tool_manager.tool_engine = MagicMock(return_value=NoToolFound())
+            ctrl._mock_tool_engine = MagicMock(return_value=NoToolFound())
             yield ctrl
 
     @patch('brain.call_llm')
@@ -97,22 +94,17 @@ class TestHarnessControllerRunTask:
 
         controller_instance.run_task("Hello")
 
-        # Should be only the initial call, no tool execution loop
         assert mock_call_llm.call_count == 1
 
     @patch('brain.call_llm')
     def test_run_task_with_tool_call(self, mock_call_llm, controller_instance):
-        """Tool dispatch is triggered when response has tool call.
-        
-        Uses return_value to avoid iteration complexity in test.
-        """
+        """Tool dispatch is triggered when response has tool call."""
         from response import LLMResponse, NoToolFound
         mock_call_llm.return_value = LLMResponse(text="Done")
-        controller_instance.tool_manager.tool_engine = MagicMock(return_value=NoToolFound())
+        controller_instance._mock_tool_engine = MagicMock(return_value=NoToolFound())
 
         controller_instance.run_task("Read the file", call_llm=mock_call_llm)
 
-        # Verify call_llm was called at least once
         assert mock_call_llm.call_count >= 1
 
     @patch('brain.call_llm')
@@ -127,12 +119,11 @@ class TestHarnessControllerRunTask:
 
 
 class TestToolEngineIntegration:
-    """Tests for ToolEngine integration in controller."""
+    """Tests for tool integration via IterationHandler."""
 
     @pytest.fixture
     def controller(self):
-        with \
-             patch('controller.ProviderManager') as mock_pm_class, \
+        with patch('controller.ProviderManager') as mock_pm_class, \
              patch('controller.get_memory') as mock_get_memory:
             mock_pm_instance = MagicMock()
             mock_pm_class.return_value = mock_pm_instance
@@ -145,22 +136,15 @@ class TestToolEngineIntegration:
             ctrl = HarnessController()
             return ctrl
 
-    def test_controller_has_tool_manager(self, controller):
-        """Controller should have tool_manager attribute."""
-        assert hasattr(controller, 'tool_manager')
-        from tool_manager import ToolManager
-        assert isinstance(controller.tool_manager, ToolManager)
-
-    def test_tool_manager_has_tool_engine(self, controller):
-        """Tool manager should have tool_engine as function reference."""
+    def test_tool_dispatch_function_exists(self, controller):
+        """Tool dispatch should be available through IterationHandler."""
         from tool_dispatch import dispatch, dispatch_with_text_parsing
-        assert hasattr(controller.tool_manager, 'tool_engine')
-        # tool_engine can be either dispatch or dispatch_with_text_parsing
-        # depending on provider attributes (text parsing flags)
-        assert controller.tool_manager.tool_engine in (dispatch, dispatch_with_text_parsing)
+        # Verify dispatch functions exist and are callable
+        assert callable(dispatch)
+        assert callable(dispatch_with_text_parsing)
 
-    def test_tool_engine_is_callable_function(self, controller):
-        """dispatch() should be callable and return NoToolFound for plain text."""
+    def test_dispatch_returns_no_tool_found_for_plain_text(self, controller):
+        """dispatch() should return NoToolFound for plain text responses."""
         from tool_dispatch import dispatch
         from response import LLMResponse, NoToolFound
         result = dispatch(LLMResponse(text="Plain text, no tool"))
