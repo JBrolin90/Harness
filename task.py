@@ -136,7 +136,7 @@ class Task:
         if not response.has_tool_calls:
             return response.text
 
-        return self._execute_loop(response, system_prompt, call_llm)
+        return self._agent_loop(response, system_prompt, call_llm)
 
     def _call_llm_and_process(self, messages: list[dict], system_prompt: str, call_llm) -> LLMResponse:
         print(f"[Thinking with {self.provider.name} / {self.provider.model}...]")
@@ -156,7 +156,7 @@ class Task:
 
         return response
 
-    def _execute_loop(self, initial_response: LLMResponse, system_prompt: str, call_llm) -> str:
+    def _agent_loop(self, initial_response: LLMResponse, system_prompt: str, call_llm) -> str:
         response = initial_response
         repetition_detector = RepetitionDetector()
 

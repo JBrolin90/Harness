@@ -24,8 +24,8 @@ class SessionManager:
 
         system_prompt = self.system_prompt_manager.get_system_prompt()
 
-        handler = Task(self.current_provider, max_iterations)
-        return handler.run(
+        task = Task(self.current_provider, max_iterations)
+        return task.run(
             prompt=prompt,
             system_prompt=system_prompt,
             call_llm=call_llm_fn
