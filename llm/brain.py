@@ -72,30 +72,54 @@ def consult_llm(history: list, system_prompt: str, config: ProviderConfig) -> LL
         return LLMResponse(error=f"[BRAIN ERROR: {e}]")
 
 
-def _extract_message_at_path(data: dict, message_key: str, provider_type: str) -> LLMResponse:
-    """Navigate to message using dot-notation path and extract content + tool_calls.
+def _navigate_to_message(data: dict, message_key: str) -> dict | None:
+    """Navigate to message using dot-notation path.
     
     Args:
         data: Response dictionary from API.
-        message_key: Dot-notation path to the message object (e.g., "choices[0].message" or "message").
-        provider_type: Provider identifier to select appropriate tool call parser.
+        message_key: Dot-notation path (e.g., "choices[0].message" or "message").
+    
+    Returns:
+        Message dict if found, None if path doesn't exist.
     """
-    # Navigate to message using dot notation
     parts = message_key.split(".")
-    message = data
+    current = data
     for part in parts:
-        # Handle list indexing like choices[0]
         if "[" in part and part.endswith("]"):
             key, idx_str = part.split("[")
             idx = int(idx_str.rstrip("]"))
-            if isinstance(message, dict) and key in message and isinstance(message[key], list) and len(message[key]) > idx:
-                message = message[key][idx]
+            if isinstance(current, dict) and key in current and isinstance(current[key], list) and len(current[key]) > idx:
+                current = current[key][idx]
             else:
-                return LLMResponse(error=f"[BRAIN ERROR: Missing '{message_key}' in response]")
-        elif isinstance(message, dict) and part in message:
-            message = message[part]
+                return None
+        elif isinstance(current, dict) and part in current:
+            current = current[part]
         else:
-            return LLMResponse(error=f"[BRAIN ERROR: Missing '{message_key}' in response]")
+            return None
+    return current
+
+
+def _check_truncation(data: dict, tool_calls: list) -> None:
+    """Check and warn if response may be truncated (finish_reason is 'length')."""
+    if "choices" in data and isinstance(data["choices"], list) and len(data["choices"]) > 0:
+        choice = data["choices"][0]
+        finish_reason = choice.get("finish_reason") if isinstance(choice, dict) else None
+        if tool_calls and finish_reason == "length":
+            print("[BRAIN WARNING: Response may be truncated - finish_reason is 'length' with tool_calls]")
+
+
+def _extract_message_at_path(data: dict, message_key: str, provider_type: str) -> LLMResponse:
+    """Navigate to message and extract content + tool_calls.
+    
+    Args:
+        data: Response dictionary from API.
+        message_key: Dot-notation path to the message object.
+        provider_type: Provider identifier to select appropriate tool call parser.
+    """
+    message = _navigate_to_message(data, message_key)
+    
+    if message is None:
+        return LLMResponse(error=f"[BRAIN ERROR: Missing '{message_key}' in response]")
     
     if message is None:
         return LLMResponse(error=f"[BRAIN ERROR: {message_key} is None]")
@@ -103,13 +127,7 @@ def _extract_message_at_path(data: dict, message_key: str, provider_type: str) -
     parser = get_parser(provider_type)
     tool_calls = parser.extract_tool_calls(message)[:MAX_TOOL_CALLS]
     
-    # Validate finish_reason if available (check for truncation with tool calls)
-    finish_reason = None
-    if "choices" in data and isinstance(data["choices"], list) and len(data["choices"]) > 0:
-        choice = data["choices"][0]
-        finish_reason = choice.get("finish_reason") if isinstance(choice, dict) else None
-        if tool_calls and finish_reason == "length":
-            print("[BRAIN WARNING: Response may be truncated - finish_reason is 'length' with tool_calls]")
+    _check_truncation(data, tool_calls)
     
     return LLMResponse(
         text=_extract_text_content(message),
