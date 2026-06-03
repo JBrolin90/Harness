@@ -27,7 +27,7 @@ class Task:
 
             result = self.tool_engine(response)
 
-            if self.conversation.add_tool_response(result):
+            if not self.conversation.add_tool(result):
                 break
 
         return response.text if response.text else NO_TEXT_RESPONSE

@@ -29,8 +29,8 @@ class ConversationHistory:
         cleaned = self._clean_text(text)
         self.add_assistant_message(cleaned if cleaned.strip() else THINKING_PLACEHOLDER)
 
-    def add_tool_response(self, result) -> bool:
-        """Add tool result and check for repetition. Returns True to stop (repetition detected)."""
+    def add_tool(self, result) -> bool:
+        """Add tool result. Returns True if added successfully (no repetition), False to stop."""
         match result:
             case _ if hasattr(result, 'tool_name') and hasattr(result, 'output'):
                 result_str = str(result.output) if result.tool_name == "system" else f"Observation: {str(result.output)}"
@@ -44,11 +44,11 @@ class ConversationHistory:
         # Check last assistant message for repetition
         last_msg = next((m for m in reversed(self.history) if m["role"] == "assistant"), None)
         if last_msg:
-            return self._repetition_detector.check_after_tool_result(
+            return not self._repetition_detector.check_after_tool_result(
                 text=last_msg["content"],
                 has_tool_calls=True
             )
-        return False
+        return True
 
     @staticmethod
     def _clean_text(text: str) -> str:
