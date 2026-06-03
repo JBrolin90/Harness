@@ -1,112 +1,12 @@
+"""Executes a task: initial LLM call + iterations until completion."""
 import json
-import re
-from dataclasses import dataclass
-from typing import Protocol
 
 from response import LLMResponse, ToolResult, SystemError
 
-
-# Constants for output messages
-SYSTEM_MESSAGE_REPETITION = (
-    "Observation: !!! REPETITION ERROR !!! "
-    "You are repeating yourself. You already have this result in history. "
-    "Look at previous Observations. Provide your Final Answer now or try a DIFFERENT approach."
-)
-THINKING_PLACEHOLDER = "[Thinking...]"
-NO_TEXT_RESPONSE = "[Task completed but no text response received]"
-
-
-class ToolEngine(Protocol):
-    """Protocol for tool execution engines."""
-    def __call__(self, response: LLMResponse) -> ToolResult | SystemError: ...
-
-
-@dataclass
-class ActionSignature:
-    """Represents a unique action signature for repetition detection."""
-    signature: str | None
-    assistant_text: str
-    had_tool_call: bool
-
-
-class RepetitionDetector:
-    """Detects repetitive behavior by tracking action signatures."""
-
-    def __init__(self):
-        self._previous: ActionSignature | None = None
-        self._has_recorded_action: bool = False
-
-    def is_repetitive(self, response: LLMResponse, action_sig: str | None) -> bool:
-        if not self._has_recorded_action or self._previous is None:
-            return False
-
-        prev = self._previous
-        current_had_tool_call = response.has_tool_calls
-
-        # Different tool call patterns are not repetition
-        if prev.had_tool_call != current_had_tool_call:
-            return False
-
-        # Check for repeated tool call signature
-        if current_had_tool_call and action_sig and prev.signature:
-            if action_sig == prev.signature:
-                return True
-
-        # Check for repeated text response (no tool calls)
-        if not current_had_tool_call and prev.assistant_text and response.text:
-            current_text = response.text.strip()
-            if current_text and current_text == prev.assistant_text.strip():
-                return True
-
-        return False
-
-    def record(self, action_sig: str | None, assistant_text: str, had_tool_call: bool) -> None:
-        self._previous = ActionSignature(action_sig, assistant_text, had_tool_call)
-        self._has_recorded_action = True
-
-    def get_repetition_message(self) -> str:
-        return SYSTEM_MESSAGE_REPETITION
-
-
-class ConversationState:
-    """Manages conversation history."""
-
-    _TOOL_CALL_BLOCK_PATTERN = re.compile(r'```tool_call\n[\s\S]*?\n```')
-    _TOOL_CALL_TAG_PATTERN = re.compile(r'<tool_call>[\s\S]*?</tool_call>')
-
-
-    def __init__(self):
-        self.history: list[dict] = []
-
-    def add_user_message(self, content: str) -> None:
-        self.history.append({"role": "user", "content": content})
-
-    def add_assistant_message(self, content: str) -> None:
-        self.history.append({"role": "assistant", "content": content})
-
-    def add_tool_result(self, content: str) -> None:
-        self.history.append({"role": "tool", "content": content})
-
-    @staticmethod
-    def clean_assistant_text(text: str) -> str:
-        if not text:
-            return ""
-        cleaned = ConversationState._TOOL_CALL_BLOCK_PATTERN.sub('', text)
-        cleaned = ConversationState._TOOL_CALL_TAG_PATTERN.sub('', cleaned)
-        return cleaned.strip()
-
-    @property
-    def messages(self) -> list[dict]:
-        return self.history
-
-    def get_stats(self) -> str:
-        user = sum(1 for m in self.history if m["role"] == "user")
-        assistant = sum(1 for m in self.history if m["role"] == "assistant")
-        tool = sum(1 for m in self.history if m["role"] == "tool")
-        return f"msgs: {len(self.history)} (u:{user} a:{assistant} t:{tool})"
-
-    def reset(self) -> None:
-        self.history = []
+from task.constants import THINKING_PLACEHOLDER, NO_TEXT_RESPONSE
+from task.tool_engine import ToolEngine
+from task.conversation_state import ConversationState
+from task.repetition_detector import RepetitionDetector
 
 
 class Task:
@@ -198,7 +98,7 @@ class Task:
         from tool_dispatch import extract_json_string, parse_bash_command
         raw_json = extract_json_string(response.text or "")
         raw_bash = parse_bash_command(response.text or "")
-        
+
         result = raw_json or raw_bash
         if result:
             return json.dumps(result)
