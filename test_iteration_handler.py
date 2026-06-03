@@ -140,12 +140,12 @@ class TestTask:
         handler = Task(mock_tool_engine)
         
         mock_response = LLMResponse(text="I can help with that.")
-        mock_call_llm = MagicMock(return_value=mock_response)
+        custom_consult_llm = MagicMock(return_value=mock_response)
         
-        result = handler.run("Hello", "System prompt", mock_call_llm, mock_provider)
+        result = handler.run("Hello", "System prompt", custom_consult_llm, mock_provider)
         
         assert result == "I can help with that."
-        mock_call_llm.assert_called_once()
+        custom_consult_llm.assert_called_once()
 
     def test_execute_with_tool_call_triggers_loop(self, mock_provider, mock_tool_engine):
         """run should trigger loop when tool call detected."""
@@ -157,7 +157,7 @@ class TestTask:
         response_without_tool = LLMResponse(text="Done!")
         
         call_count = [0]
-        def mock_call_llm(*args):
+        def custom_consult_llm(*args):
             call_count[0] += 1
             if call_count[0] == 1:
                 return response_with_tool
@@ -165,7 +165,7 @@ class TestTask:
         
         mock_tool_engine.return_value = NoToolFound()
         
-        result = handler.run("Read a file", "System prompt", mock_call_llm, mock_provider)
+        result = handler.run("Read a file", "System prompt", custom_consult_llm, mock_provider)
         
         assert call_count[0] >= 1
 
@@ -187,9 +187,9 @@ class TestTaskIntegration:
         handler = Task(MagicMock())
         
         mock_response = LLMResponse(text="Response text")
-        mock_call_llm = MagicMock(return_value=mock_response)
+        custom_consult_llm = MagicMock(return_value=mock_response)
         
-        handler.run("User prompt", "System prompt", mock_call_llm, mock_provider)
+        handler.run("User prompt", "System prompt", custom_consult_llm, mock_provider)
         
         # Should have user message and assistant response
         assert len(handler.conversation.history) == 2

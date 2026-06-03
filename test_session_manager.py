@@ -90,22 +90,22 @@ class TestSessionManagerRunTask:
         call_kwargs = mock_task_instance.run.call_args.kwargs
         assert 'prompt' in call_kwargs
         assert 'system_prompt' in call_kwargs
-        assert 'call_llm' in call_kwargs
+        assert 'consult_llm' in call_kwargs
         assert 'provider' in call_kwargs
 
     @patch('session.session_manager.Task')
-    def test_run_task_with_custom_call_llm(self, mock_task_class, session_instance):
+    def test_run_task_with_custom_consult_llm(self, mock_task_class, session_instance):
         """run_task() should pass custom call_llm to run."""
         mock_task_instance = MagicMock()
         mock_task_instance.run.return_value = "Done"
         mock_task_class.return_value = mock_task_instance
         session_instance.system_prompt_manager.get_system_prompt = MagicMock(return_value="System prompt")
-        custom_call_llm = MagicMock()
-
-        session_instance.run_task("Hello", call_llm=custom_call_llm)
+        custom_consult_llm = MagicMock()
+        
+        session_instance.run_task("Hello", consult_llm=custom_consult_llm)
 
         call_kwargs = mock_task_instance.run.call_args.kwargs
-        assert call_kwargs['call_llm'] is custom_call_llm
+        assert call_kwargs['consult_llm'] is custom_consult_llm
 
     @patch('session.session_manager.ToolManager')
     @patch('session.session_manager.Task')

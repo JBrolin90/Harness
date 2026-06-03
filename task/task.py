@@ -12,12 +12,12 @@ class Task:
         self.max_iterations = max_iterations
         self.conversation = ConversationHistory()
 
-    def run(self, prompt: str, system_prompt: str, call_llm, provider) -> str:
+    def run(self, prompt: str, system_prompt: str, consult_llm, provider) -> str:
         self._provider = provider
         self.conversation.add_user_message(prompt)
 
         while True:
-            response = call_llm(self.conversation.messages, system_prompt, self._provider)
+            response = consult_llm(self.conversation.messages, system_prompt, self._provider)
             self.conversation.add_model_response(response.text)
 
             if not response.has_tool_calls:

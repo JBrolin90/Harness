@@ -183,7 +183,7 @@ def _make_request_with_retry(url: str, headers: dict, payload: dict, max_retries
     raise RuntimeError("Request failed: max retries reached without a specific exception")
 
 
-def call_llm(history: list, system_prompt: str, config: ProviderConfig) -> LLMResponse:
+def consult_llm(history: list, system_prompt: str, config: ProviderConfig) -> LLMResponse:
     """Unified LLM request handler using a ProviderConfig object."""
     # Resolve API key from environment variable if specified
     resolved_api_key = os.environ.get(config.api_key_env_var, "") if config.api_key_env_var else ""
