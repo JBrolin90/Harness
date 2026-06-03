@@ -4,7 +4,7 @@ from response import ToolResult, SystemError
 from task.constants import NO_TEXT_RESPONSE
 from task.tool_engine import ToolEngine
 from session.conversation_history import ConversationHistory
-from task.repetition_detector import RepetitionDetector, StopReason
+from task.repetition_detector import RepetitionDetector
 
 
 class Task:
@@ -22,33 +22,20 @@ class Task:
 
     def _agent_loop(self, system_prompt: str, call_llm) -> str:
         detector = RepetitionDetector()
-        iteration = 0
 
         while True:
-            iteration += 1
             response = call_llm(self.conversation.messages, system_prompt, self._provider)
-
             self.conversation.add_model_response(response.text)
 
-            # Check if we should stop, record for next iteration
-            stop = detector.evaluate(response, iteration, self.max_iterations)
-
-            if stop == StopReason.NO_TOOL_CALL:
+            if not response.has_tool_calls:
                 return response.text
-            elif stop == StopReason.MAX_ITERATIONS:
+
+            result = self.tool_engine(response)
+
+            should_stop = self.conversation.add_tool_response(result, detector)
+
+            if should_stop:
                 break
-            elif stop == StopReason.REPETITION:
-                result = ToolResult(tool_name="system", output=detector.get_repetition_message())
-            else:
-                result = self.tool_engine(response)
-
-            match result:
-                case ToolResult() as r:
-                    result_str = str(r.output) if r.tool_name == "system" else f"Observation: {str(r.output)}"
-                case SystemError() as e:
-                    result_str = str(e)
-
-            self.conversation.add_tool_result(result_str)
 
         return response.text if response.text else NO_TEXT_RESPONSE
 
