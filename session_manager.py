@@ -1,5 +1,5 @@
 """Session manager - orchestrates task execution with LLM and tools."""
-from task import Task
+from task.task import Task
 from tool_manager import ToolManager, ToolEngine
 from systemprompt import SystemPromptManager
 from provider import ProviderManager
