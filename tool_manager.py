@@ -1,21 +1,17 @@
 """Tool management - builds tools list and selects appropriate dispatch engine."""
-from typing import Callable
-
 from tools.base_tool import BaseTool
 from tool_dispatch import dispatch, dispatch_with_text_parsing
+from task.execute_tools import ExecuteTools
 from response import LLMResponse, ToolResult, SystemError, NoToolFound
-
-
-# Type alias for the tool engine function signature
-ToolEngine = Callable[[LLMResponse], ToolResult | SystemError | NoToolFound]
 
 
 class ToolManager:
     """Manages tool registry and dispatch engine selection."""
 
-    def __init__(self):
+    def __init__(self, provider_attributes: dict | None = None):
         self._tools: list[dict] = []
-        self.tool_engine: ToolEngine = dispatch
+        self.build_tools_list()
+        self.execute_tools = self.select_dispatch_engine(provider_attributes)
 
     def build_tools_list(self) -> list[dict]:
         """Build tools list from registered BaseTool classes."""
@@ -32,7 +28,7 @@ class ToolManager:
             })
         return self._tools
 
-    def select_dispatch_engine(self, provider_attributes: dict | None = None) -> ToolEngine:
+    def select_dispatch_engine(self, provider_attributes: dict | None = None) -> ExecuteTools:
         """Select appropriate dispatch engine based on provider text parsing flags."""
         attrs = provider_attributes or {}
         text_parsing_flags = [
@@ -41,16 +37,8 @@ class ToolManager:
         ]
         has_text_parsing = any(attrs.get(flag) for flag in text_parsing_flags)
         
-        self.tool_engine = dispatch_with_text_parsing if has_text_parsing else dispatch
-        return self.tool_engine
-
-    def setup(self, provider_attributes: dict | None = None) -> None:
-        """Configure tool manager for a provider.
-        
-        Builds tools list and selects appropriate dispatch engine.
-        """
-        self.build_tools_list()
-        self.select_dispatch_engine(provider_attributes)
+        self.execute_tools = dispatch_with_text_parsing if has_text_parsing else dispatch
+        return self.execute_tools
 
     @property
     def tools(self) -> list[dict]:

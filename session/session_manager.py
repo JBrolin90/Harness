@@ -1,5 +1,6 @@
 """Session manager - orchestrates task execution with LLM and tools."""
-from iteration_handler import IterationHandler
+from task.task import Task
+from tool_manager import ToolManager
 from systemprompt import SystemPromptManager
 from provider import ProviderManager
 from tools.core_config import set_current_provider
@@ -17,18 +18,23 @@ class SessionManager:
         )
         print("[Config preloaded]")
 
-    def run_task(self, prompt: str, max_iterations: int = 25, call_llm=None) -> str:
+    def run_task(self, prompt: str, max_iterations: int = 25, consult_llm=None) -> str:
         """Execute a task with the given prompt."""
-        from brain import call_llm as _call_llm
-        call_llm_fn = call_llm or _call_llm
+        from brain import consult_llm as _consult_llm
+        consult_llm_fn = consult_llm or _consult_llm
 
         system_prompt = self.system_prompt_manager.get_system_prompt()
 
-        handler = IterationHandler(self.current_provider, max_iterations)
-        return handler.execute(
+        tool_manager = ToolManager(self.current_provider.attributes)
+        self.current_provider.tools = tool_manager.tools
+        execute_tools = tool_manager.execute_tools
+        
+        task = Task(execute_tools, max_iterations)
+        return task.run(
             prompt=prompt,
             system_prompt=system_prompt,
-            call_llm=call_llm_fn
+            consult_llm=consult_llm_fn,
+            provider=self.current_provider
         )
 
     def reset(self) -> None:
