@@ -29,7 +29,7 @@ class TestHarnessControllerInit:
 
         assert hasattr(ctrl, 'current_provider')
         assert hasattr(ctrl, 'conversation_manager')
-        assert hasattr(ctrl, 'tool_engine')
+        assert hasattr(ctrl, 'tool_manager')
         assert ctrl.current_provider == mock_provider
         assert hasattr(ctrl.conversation_manager, 'history')
 
@@ -75,7 +75,7 @@ class TestHarnessControllerRunTask:
             ctrl = HarnessController()
             ctrl.current_provider = MagicMock()
             ctrl.system_prompt = "Test prompt"
-            ctrl.tool_engine = MagicMock(return_value=NoToolFound())
+            ctrl.tool_manager.tool_engine = MagicMock(return_value=NoToolFound())
             yield ctrl
 
     @patch('brain.call_llm')
@@ -110,7 +110,7 @@ class TestHarnessControllerRunTask:
         """
         from response import LLMResponse, NoToolFound
         mock_call_llm.return_value = LLMResponse(text="Done")
-        controller_instance.tool_engine.return_value = NoToolFound()
+        controller_instance.tool_manager.tool_engine = MagicMock(return_value=NoToolFound())
 
         controller_instance.run_task("Read the file", call_llm=mock_call_llm)
 
@@ -208,18 +208,23 @@ class TestToolEngineIntegration:
             ctrl = HarnessController()
             return ctrl
 
-    def test_controller_has_tool_engine_function(self, controller):
-        """Controller should have tool_engine as function reference."""
+    def test_controller_has_tool_manager(self, controller):
+        """Controller should have tool_manager attribute."""
+        assert hasattr(controller, 'tool_manager')
+        from tool_manager import ToolManager
+        assert isinstance(controller.tool_manager, ToolManager)
+
+    def test_tool_manager_has_tool_engine(self, controller):
+        """Tool manager should have tool_engine as function reference."""
         from tool_dispatch import dispatch, dispatch_with_text_parsing
-        assert hasattr(controller, 'tool_engine')
+        assert hasattr(controller.tool_manager, 'tool_engine')
         # tool_engine can be either dispatch or dispatch_with_text_parsing
         # depending on provider attributes (text parsing flags)
-        assert controller.tool_engine in (dispatch, dispatch_with_text_parsing)
+        assert controller.tool_manager.tool_engine in (dispatch, dispatch_with_text_parsing)
 
     def test_tool_engine_is_callable_function(self, controller):
         """dispatch() should be callable and return NoToolFound for plain text."""
         from tool_dispatch import dispatch
-        from response import LLMResponse
+        from response import LLMResponse, NoToolFound
         result = dispatch(LLMResponse(text="Plain text, no tool"))
-        from response import NoToolFound
         assert isinstance(result, NoToolFound)

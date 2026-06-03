@@ -1,12 +1,11 @@
 """Agent controller with instance-based state for modularity and testability."""
 from conversation import ConversationManager
 from iteration_handler import IterationHandler
-from tool_dispatch import dispatch, dispatch_with_text_parsing
+from tool_manager import ToolManager
 from terminal_history import terminal_history_upgrade
 from provider import ProviderManager
 from systemprompt import build_system_prompt
 from tools.core_config import set_current_provider
-from tools.base_tool import BaseTool
 from memory import get_memory, load_memory_instructions
 from response import LLMResponse
 
@@ -21,39 +20,14 @@ class HarnessController:
         self._init_system_prompt()
 
     def _init_provider(self, provider_name: str) -> None:
-        """Initialize the provider and select appropriate tool engine."""
+        """Initialize the provider."""
         self.current_provider = ProviderManager().get_provider(provider_name)
         set_current_provider(self.current_provider)
 
-        # Select tool engine based on provider text parsing capabilities
-        if self._has_text_parsing():
-            self.tool_engine = dispatch_with_text_parsing
-        else:
-            self.tool_engine = dispatch
-
-    def _has_text_parsing(self) -> bool:
-        """Check if provider has text parsing enabled in attributes."""
-        attrs = self.current_provider.attributes or {}
-        text_parsing_flags = [
-            "text_parse_json_codeblock", "text_parse_json_raw", "text_parse_bash",
-            "text_parse_xml", "text_parse_colon_xml", "text_parse_plain_xml"
-        ]
-        return any(attrs.get(flag) for flag in text_parsing_flags)
-
     def _init_tools(self) -> None:
-        """Build tools list from registered BaseTool classes."""
-        tools = []
-        for tool_cls in BaseTool._registry.values():
-            tool = tool_cls()
-            tools.append({
-                "type": "function",
-                "function": {
-                    "name": tool.name,
-                    "description": tool.description,
-                    "parameters": tool.parameters
-                }
-            })
-        self.current_provider.tools = tools
+        """Initialize tool manager and configure for provider."""
+        self.tool_manager = ToolManager()
+        self.tool_manager.setup_for_provider(self.current_provider)
 
     def _init_system_prompt(self) -> None:
         """Initialize memory and system prompt."""
@@ -107,7 +81,7 @@ class HarnessController:
         )
 
         # Execute tool loop
-        iteration_handler = IterationHandler(self.tool_engine, max_iterations)
+        iteration_handler = IterationHandler(self.tool_manager.tool_engine, max_iterations)
         return iteration_handler.execute_loop(
             initial_response=response,
             call_llm=call_llm_fn,

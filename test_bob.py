@@ -83,7 +83,7 @@ class TestHarnessControllerRunTask:
             ctrl = HarnessController()
             ctrl.current_provider = MagicMock()
             ctrl.system_prompt = "Test prompt"
-            ctrl.tool_engine = MagicMock(return_value=NoToolFound())
+            ctrl.tool_manager.tool_engine = MagicMock(return_value=NoToolFound())
             yield ctrl
 
     @patch('brain.call_llm')
@@ -102,7 +102,7 @@ class TestHarnessControllerRunTask:
         Uses return_value instead of side_effect to avoid iteration complexity.
         """
         mock_call_llm.return_value = LLMResponse(text="Done")
-        controller_instance.tool_engine.return_value = NoToolFound()
+        controller_instance.tool_manager.tool_engine = MagicMock(return_value=NoToolFound())
 
         controller_instance.run_task("Read the file", call_llm=mock_call_llm)
 
@@ -159,7 +159,8 @@ class TestControllerReset:
         assert controller_instance.conversation_manager.history == []
 
     def test_reset_preserves_tool_engine(self, controller_instance):
-        """After reset, tool_engine should remain set."""
+        """After reset, tool_manager should remain set."""
         controller_instance.reset()
-        assert hasattr(controller_instance, 'tool_engine')
-        assert callable(controller_instance.tool_engine)
+        assert hasattr(controller_instance, 'tool_manager')
+        assert hasattr(controller_instance.tool_manager, 'tool_engine')
+        assert callable(controller_instance.tool_manager.tool_engine)
