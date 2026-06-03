@@ -1,10 +1,17 @@
 """Detects repetitive behavior by tracking action signatures."""
 import json
+from enum import StrEnum
 
 from response import LLMResponse
 
 from task.constants import SYSTEM_MESSAGE_REPETITION
 from task.action_signature import ActionSignature
+
+
+class StopReason(StrEnum):
+    NO_TOOL_CALL = "no_tool_call"
+    MAX_ITERATIONS = "max_iterations"
+    REPETITION = "repetition"
 
 
 class RepetitionDetector:
@@ -13,6 +20,24 @@ class RepetitionDetector:
     def __init__(self):
         self._previous: ActionSignature | None = None
         self._has_recorded_action: bool = False
+
+    def check(self, response: LLMResponse, action_sig: str | None, iteration: int, max_iterations: int) -> StopReason | None:
+        """Check response and determine if we should stop. Returns StopReason or None to continue."""
+        if iteration >= max_iterations:
+            return StopReason.MAX_ITERATIONS
+
+        if not response.has_tool_calls:
+            return StopReason.NO_TOOL_CALL
+
+        if self.is_repetitive(response, action_sig):
+            return StopReason.REPETITION
+
+        return None
+
+    def record(self, action_sig: str | None, assistant_text: str, had_tool_call: bool) -> None:
+        """Record current response state for repetition detection on next iteration."""
+        self._previous = ActionSignature(action_sig, assistant_text, had_tool_call)
+        self._has_recorded_action = True
 
     def is_repetitive(self, response: LLMResponse, action_sig: str | None) -> bool:
         if not self._has_recorded_action or self._previous is None:
@@ -37,10 +62,6 @@ class RepetitionDetector:
                 return True
 
         return False
-
-    def record(self, action_sig: str | None, assistant_text: str, had_tool_call: bool) -> None:
-        self._previous = ActionSignature(action_sig, assistant_text, had_tool_call)
-        self._has_recorded_action = True
 
     def get_repetition_message(self) -> str:
         return SYSTEM_MESSAGE_REPETITION

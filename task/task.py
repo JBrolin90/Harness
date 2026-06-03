@@ -4,7 +4,7 @@ from response import LLMResponse, ToolResult, SystemError
 from task.constants import THINKING_PLACEHOLDER, NO_TEXT_RESPONSE
 from task.tool_engine import ToolEngine
 from session.conversation_history import ConversationHistory
-from task.repetition_detector import RepetitionDetector
+from task.repetition_detector import RepetitionDetector, StopReason
 
 
 class Task:
@@ -21,26 +21,29 @@ class Task:
         return self._agent_loop(system_prompt, call_llm)
 
     def _agent_loop(self, system_prompt: str, call_llm) -> str:
-        repetition_detector = RepetitionDetector()
+        detector = RepetitionDetector()
         iteration = 0
 
         while True:
             iteration += 1
             response = call_llm(self.conversation.messages, system_prompt, self._provider)
-            
+
             # Store assistant response
             clean_text = ConversationHistory.clean_assistant_text(response.text)
             self.conversation.add_assistant_message(
                 clean_text if clean_text.strip() else THINKING_PLACEHOLDER
             )
 
-            if not response.has_tool_calls:
-                return response.text
-
+            # Check if we should stop
             action_sig = RepetitionDetector.compute_signature(response)
-            
-            if repetition_detector.is_repetitive(response, action_sig):
-                result = ToolResult(tool_name="system", output=repetition_detector.get_repetition_message())
+            stop = detector.check(response, action_sig, iteration, self.max_iterations)
+
+            if stop == StopReason.NO_TOOL_CALL:
+                return response.text
+            elif stop == StopReason.MAX_ITERATIONS:
+                break
+            elif stop == StopReason.REPETITION:
+                result = ToolResult(tool_name="system", output=detector.get_repetition_message())
             else:
                 result = self.tool_engine(response)
 
@@ -52,14 +55,12 @@ class Task:
 
             self.conversation.add_tool_result(result_str)
 
-            if iteration >= self.max_iterations:
-                break
-
-            repetition_detector.record(
-                action_sig,
-                ConversationHistory.clean_assistant_text(response.text),
-                response.has_tool_calls
-            )
+            if stop is None:
+                detector.record(
+                    action_sig,
+                    ConversationHistory.clean_assistant_text(response.text),
+                    response.has_tool_calls
+                )
 
         return response.text if response.text else NO_TEXT_RESPONSE
 
