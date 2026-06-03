@@ -65,9 +65,9 @@ class TestSessionManagerRunTask:
             session.current_provider = MagicMock()
             yield session
 
-    @patch('iteration_handler.IterationHandler.execute')
+    @patch('task.Task.execute')
     def test_run_task_returns_execute_result(self, mock_execute, session_instance):
-        """run_task() should return the result from IterationHandler.execute()."""
+        """run_task() should return the result from Task.execute()."""
         mock_execute.return_value = "Final answer"
 
         result = session_instance.run_task("Hello Bob")
@@ -75,7 +75,7 @@ class TestSessionManagerRunTask:
         assert result == "Final answer"
         mock_execute.assert_called_once()
 
-    @patch('iteration_handler.IterationHandler.execute')
+    @patch('task.Task.execute')
     def test_run_task_passes_parameters_to_execute(self, mock_execute, session_instance):
         """run_task() should pass prompt and system_prompt to execute."""
         mock_execute.return_value = "Done"
@@ -88,7 +88,7 @@ class TestSessionManagerRunTask:
         assert 'system_prompt' in call_kwargs
         assert 'call_llm' in call_kwargs
 
-    @patch('iteration_handler.IterationHandler.execute')
+    @patch('task.Task.execute')
     def test_run_task_with_custom_call_llm(self, mock_execute, session_instance):
         """run_task() should pass custom call_llm to execute."""
         mock_execute.return_value = "Done"
@@ -100,13 +100,13 @@ class TestSessionManagerRunTask:
         call_kwargs = mock_execute.call_args.kwargs
         assert call_kwargs['call_llm'] is custom_call_llm
 
-    @patch('iteration_handler.IterationHandler.execute')
+    @patch('task.Task.execute')
     def test_run_task_with_max_iterations(self, mock_execute, session_instance):
-        """run_task() should pass max_iterations to IterationHandler constructor."""
+        """run_task() should pass max_iterations to Task constructor."""
         mock_execute.return_value = "Done"
         session_instance.system_prompt_manager.get_system_prompt = MagicMock(return_value="System prompt")
 
-        with patch('session_manager.IterationHandler') as mock_handler_class:
+        with patch('session_manager.Task') as mock_handler_class:
             mock_handler_instance = MagicMock()
             mock_handler_instance.execute.return_value = "Done"
             mock_handler_class.return_value = mock_handler_instance

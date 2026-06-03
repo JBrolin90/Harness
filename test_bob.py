@@ -82,7 +82,7 @@ class TestSessionManagerRunTask:
             session.current_provider = MagicMock()
             yield session
 
-    @patch('iteration_handler.IterationHandler.execute')
+    @patch('task.Task.execute')
     def test_run_task_returns_response(self, mock_execute, session_instance):
         """run_task() should return a response string."""
         mock_execute.return_value = "Final response from Bob"
@@ -91,9 +91,9 @@ class TestSessionManagerRunTask:
 
         assert result == "Final response from Bob"
 
-    @patch('iteration_handler.IterationHandler.execute')
+    @patch('task.Task.execute')
     def test_run_task_calls_execute(self, mock_execute, session_instance):
-        """run_task() dispatches to IterationHandler.execute()."""
+        """run_task() dispatches to Task.execute()."""
         mock_execute.return_value = "Done"
 
         session_instance.run_task("Read the file")

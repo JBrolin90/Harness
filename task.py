@@ -110,8 +110,8 @@ class ConversationState:
         self.history = []
 
 
-class IterationHandler:
-    """Executes the tool loop: initial LLM call + iterations until completion."""
+class Task:
+    """Executes a task: initial LLM call + iterations until completion."""
 
     def __init__(self, provider, max_iterations: int = 25):
         tool_manager = ToolManager()

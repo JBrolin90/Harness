@@ -1,5 +1,5 @@
 """Session manager - orchestrates task execution with LLM and tools."""
-from iteration_handler import IterationHandler
+from task import Task
 from systemprompt import SystemPromptManager
 from provider import ProviderManager
 from tools.core_config import set_current_provider
@@ -24,7 +24,7 @@ class SessionManager:
 
         system_prompt = self.system_prompt_manager.get_system_prompt()
 
-        handler = IterationHandler(self.current_provider, max_iterations)
+        handler = Task(self.current_provider, max_iterations)
         return handler.execute(
             prompt=prompt,
             system_prompt=system_prompt,
