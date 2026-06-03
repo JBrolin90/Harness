@@ -22,13 +22,12 @@ class Task:
         self.conversation.add_user_message(prompt)
         return self._agent_loop(system_prompt, call_llm)
 
-    def _process_response(self, response: LLMResponse) -> str:
+    def _process_response(self, response: LLMResponse) -> None:
         """Extract and store assistant text from response."""
         full_text = ConversationHistory.clean_assistant_text(response.text)
         self.conversation.add_assistant_message(
             full_text if full_text.strip() else THINKING_PLACEHOLDER
         )
-        return full_text
 
     def _agent_loop(self, system_prompt: str, call_llm) -> str:
         repetition_detector = RepetitionDetector()
@@ -37,7 +36,7 @@ class Task:
         while True:
             iteration += 1
             response = call_llm(self.conversation.messages, system_prompt, self._provider)
-            full_text = self._process_response(response)
+            self._process_response(response)
 
             if not response.has_tool_calls:
                 return response.text
