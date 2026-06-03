@@ -9,6 +9,19 @@ from .retry_handler import RetryHandler
 from .response import LLMResponse, ToolCall
 
 
+# Error formatting constants
+ERROR_PREFIX = "[BRAIN ERROR: "
+ERROR_SUFFIX = "]"
+
+
+def _make_error_response(message: str) -> LLMResponse:
+    """Create a properly formatted error LLMResponse."""
+    return LLMResponse(error=f"{ERROR_PREFIX}{message}{ERROR_SUFFIX}")
+
+
+MAX_TOOL_CALLS = 50
+
+
 def _parse_tool_calls(message: dict) -> list[ToolCall]:
     """Parse tool calls using MultiFormatParser (backward compatible)."""
     return MultiFormatParser().extract_tool_calls(message)
@@ -20,9 +33,6 @@ def _format_tools_for_provider(tools: list, provider_type: str) -> list | None:
     config = type('Config', (), {'provider_type': provider_type, 'tools': tools})()
     builder = RequestBuilder(config)
     return builder._format_tools_for_provider(tools)
-
-
-MAX_TOOL_CALLS = 50
 
 
 def _extract_text_content(message: dict | None) -> str:
@@ -63,13 +73,13 @@ def consult_llm(history: list, system_prompt: str, config: ProviderConfig) -> LL
         status = e.response.status_code if e.response is not None else "unknown"
         text = e.response.text if e.response is not None else "no response body"
         print(f"[BRAIN HTTP ERROR: {status} {text}]")
-        return LLMResponse(error=f"[BRAIN ERROR: HTTP {status}]")
+        return _make_error_response(f"HTTP {status}")
     except json.JSONDecodeError as e:
         print(f"[BRAIN JSON ERROR: {e}]")
-        return LLMResponse(error="[BRAIN ERROR: Invalid JSON response from API]")
+        return _make_error_response(f"Invalid JSON response from API: {e}")
     except Exception as e:
         print(f"[BRAIN ERROR: {e}]")
-        return LLMResponse(error=f"[BRAIN ERROR: {e}]")
+        return _make_error_response(str(e))
 
 
 def _navigate_to_message(data: dict, message_key: str) -> dict | None:
@@ -119,10 +129,7 @@ def _extract_message_at_path(data: dict, message_key: str, provider_type: str) -
     message = _navigate_to_message(data, message_key)
     
     if message is None:
-        return LLMResponse(error=f"[BRAIN ERROR: Missing '{message_key}' in response]")
-    
-    if message is None:
-        return LLMResponse(error=f"[BRAIN ERROR: {message_key} is None]")
+        return _make_error_response(f"Missing '{message_key}' in response")
     
     parser = get_parser(provider_type)
     tool_calls = parser.extract_tool_calls(message)[:MAX_TOOL_CALLS]
