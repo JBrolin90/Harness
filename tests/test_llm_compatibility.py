@@ -10,11 +10,11 @@ import argparse
 import json
 from typing import Optional
 
-sys.path.insert(0, os.path.dirname(__file__))
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from provider import ProviderManager, ProviderConfig
-from brain import call_llm
-from systemprompt import build_system_prompt
+from brain import consult_llm
+from systemprompt import _build_prompt
 from tools import TOOLS
 
 
@@ -51,7 +51,7 @@ SKIP_PROVIDERS = [
 
 def build_test_system_prompt():
     """Build a system prompt that includes tool definitions for testing."""
-    return build_system_prompt()
+    return _build_prompt()
 
 
 def run_provider_test(provider_name: str, prompt: str, verbose: bool = False) -> dict:
@@ -89,7 +89,7 @@ def run_provider_test(provider_name: str, prompt: str, verbose: bool = False) ->
         system_prompt = build_test_system_prompt()
         
         conversation = [{"role": "user", "content": prompt}]
-        response = call_llm(conversation, system_prompt, test_provider_config)
+        response = consult_llm(conversation, system_prompt, test_provider_config)
         elapsed_ms = int((time.time() - start) * 1000)
         
         result["response_time_ms"] = elapsed_ms

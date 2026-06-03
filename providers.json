@@ -37,7 +37,7 @@
     {
         "name": "Qwen2.5-coder-14b",
         "provider_type": "ollama",
-        "url": "http://localhost:11434/api/chat",
+        "url": "http://lmde:11434/api/chat",
         "model": "qwen2.5-coder:14b",
         "api_key_env_var": "OLLAMA_DUMMY_KEY",
         "attributes": {
@@ -59,7 +59,7 @@
     {
         "name": "qwen2.5-coder-7b-instruct-q8",
         "provider_type": "ollama",
-        "url": "http://localhost:11434/api/chat",
+        "url": "http://lmde:11434/api/chat",
         "model": "qwen2.5-coder:7b-instruct-q8_0",
         "api_key_env_var": "OLLAMA_DUMMY_KEY",
         "attributes": {},
@@ -68,7 +68,7 @@
     {
         "name": "nomic-embed-text",
         "provider_type": "ollama",
-        "url": "http://localhost:11434/api/chat",
+        "url": "http://lmde:11434/api/chat",
         "model": "nomic-embed-text:latest",
         "api_key_env_var": "OLLAMA_DUMMY_KEY",
         "attributes": {},
@@ -77,7 +77,7 @@
     {
         "name": "gemma4-4b-ollama",
         "provider_type": "ollama",
-        "url": "http://localhost:11434/api/chat",
+        "url": "http://lmde:11434/api/chat",
         "model": "gemma4:e4b",
         "api_key_env_var": "OLLAMA_DUMMY_KEY",
         "attributes": {},
@@ -86,7 +86,7 @@
     {
         "name": "llama3.2",
         "provider_type": "ollama",
-        "url": "http://localhost:11434/api/chat",
+        "url": "http://lmde:11434/api/chat",
         "model": "llama3.2:latest",
         "api_key_env_var": "OLLAMA_DUMMY_KEY",
         "attributes": {},
@@ -95,7 +95,7 @@
     {
         "name": "deepseek-coder-6.7b",
         "provider_type": "ollama",
-        "url": "http://localhost:11434/api/chat",
+        "url": "http://lmde:11434/api/chat",
         "model": "deepseek-coder:6.7b",
         "api_key_env_var": "OLLAMA_DUMMY_KEY",
         "attributes": {},
@@ -104,7 +104,7 @@
     {
         "name": "qwen2.5-coder-3b",
         "provider_type": "ollama",
-        "url": "http://localhost:11434/api/chat",
+        "url": "http://lmde:11434/api/chat",
         "model": "qwen2.5-coder:3b",
         "api_key_env_var": "OLLAMA_DUMMY_KEY",
         "attributes": {
@@ -117,7 +117,7 @@
     {
         "name": "llama3.1-8b",
         "provider_type": "ollama",
-        "url": "http://localhost:11434/api/chat",
+        "url": "http://lmde:11434/api/chat",
         "model": "llama3.1:8b",
         "api_key_env_var": "OLLAMA_DUMMY_KEY",
         "attributes": {},
@@ -126,7 +126,7 @@
     {
         "name": "qwen2.5-coder-1.5b",
         "provider_type": "ollama",
-        "url": "http://localhost:11434/api/chat",
+        "url": "http://lmde:11434/api/chat",
         "model": "qwen2.5-coder:1.5b",
         "api_key_env_var": "OLLAMA_DUMMY_KEY",
         "attributes": {},
