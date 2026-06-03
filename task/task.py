@@ -20,26 +20,19 @@ class Task:
     def run(self, prompt: str, system_prompt: str, call_llm, provider) -> str:
         self._provider = provider
         self.conversation.add_user_message(prompt)
-        print(f"\n[Task Started] {self.conversation.get_stats()}")
         return self._agent_loop(system_prompt, call_llm)
 
-    def _call_llm_and_process(self, messages: list[dict], system_prompt: str, call_llm) -> LLMResponse:
-        print(f"[Thinking with {self._provider.name} / {self._provider.model}...]")
-        response = call_llm(messages, system_prompt, self._provider)
+    def _call_llm(self, messages: list[dict], system_prompt: str, call_llm) -> LLMResponse:
+        """Call LLM and return response."""
+        return call_llm(messages, system_prompt, self._provider)
 
-        print(f"[Model response type: {'tool_call' if response.has_tool_calls else 'text'}]")
+    def _process_response(self, response: LLMResponse) -> str:
+        """Extract and store assistant text from response."""
         full_text = ConversationHistory.clean_assistant_text(response.text)
-        if response.has_tool_calls:
-            tool_names = ", ".join(tc.name for tc in response.tool_calls)
-            print(f"Bob: {full_text} [🔧 Calling: {tool_names}]")
-        else:
-            print(f"Bob: {full_text}")
-
         self.conversation.add_assistant_message(
             full_text if full_text.strip() else THINKING_PLACEHOLDER
         )
-
-        return response
+        return full_text
 
     def _agent_loop(self, system_prompt: str, call_llm) -> str:
         repetition_detector = RepetitionDetector()
@@ -47,11 +40,8 @@ class Task:
 
         while True:
             iteration += 1
-            response = self._call_llm_and_process(
-                self.conversation.messages,
-                system_prompt,
-                call_llm
-            )
+            response = self._call_llm(self.conversation.messages, system_prompt, call_llm)
+            full_text = self._process_response(response)
 
             if not response.has_tool_calls:
                 return response.text
@@ -69,17 +59,9 @@ class Task:
                 case SystemError() as e:
                     result_str = str(e)
 
-            print(f"\n[Harness feeding result back to Bob... {self.conversation.get_stats()}]")
-            print(f"Harness: {result_str}\n")
-
             self.conversation.add_tool_result(result_str)
 
-            print(f"[Model: {self._provider.model}] {self.conversation.get_stats()} (iteration {iteration})")
-            print(f"\n================================ End of iteration {iteration} ==========================================\n")
-
             if iteration >= self.max_iterations:
-                print(f"\n[WARNING: Task reached maximum iterations ({self.max_iterations}). Stopping safety check.]")
-                print("\n========================== Max Iterations Reached ====================================\n")
                 break
 
             repetition_detector.record(
