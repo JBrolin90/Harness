@@ -22,10 +22,6 @@ class Task:
         self.conversation.add_user_message(prompt)
         return self._agent_loop(system_prompt, call_llm)
 
-    def _call_llm(self, messages: list[dict], system_prompt: str, call_llm) -> LLMResponse:
-        """Call LLM and return response."""
-        return call_llm(messages, system_prompt, self._provider)
-
     def _process_response(self, response: LLMResponse) -> str:
         """Extract and store assistant text from response."""
         full_text = ConversationHistory.clean_assistant_text(response.text)
@@ -40,7 +36,7 @@ class Task:
 
         while True:
             iteration += 1
-            response = self._call_llm(self.conversation.messages, system_prompt, call_llm)
+            response = call_llm(self.conversation.messages, system_prompt, self._provider)
             full_text = self._process_response(response)
 
             if not response.has_tool_calls:
