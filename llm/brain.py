@@ -1,8 +1,9 @@
 """LLM request handler - brain of the agent."""
 import json
-import os
 import requests
+
 from .provider import ProviderConfig
+from .request_builder import RequestBuilder
 from .response import LLMResponse, ToolCall
 
 
@@ -183,40 +184,50 @@ def _make_request_with_retry(url: str, headers: dict, payload: dict, max_retries
     raise RuntimeError("Request failed: max retries reached without a specific exception")
 
 
+def _format_tools_for_provider(tools: list, provider_type: str) -> list | None:
+    """Format tools according to provider requirements.
+    
+    - minimax: requires {"type": "function", "function": ...} wrapping
+    - openai / openrouter: use standard tool format
+    - ollama: pass as-is
+    
+    Detects if tools are already wrapped (by controller) to avoid double-wrapping.
+    Returns None if provider doesn't support tools.
+    """
+    if not tools:
+        return None
+    
+    # Check if tools are already wrapped (controller does this)
+    already_wrapped = any(
+        isinstance(t, dict) and "type" in t and "function" in t and isinstance(t.get("function"), dict)
+        for t in tools
+    )
+    
+    if provider_type == "minimax":
+        # MiniMax requires wrapping in type/function structure
+        if already_wrapped:
+            # Already wrapped by controller, pass through
+            return tools
+        return [{"type": "function", "function": t} for t in tools]
+    elif provider_type == "ollama":
+        # Ollama supports native tool_calls in recent versions
+        return tools
+    else:
+        # OpenAI-compatible: use standard format
+        return tools
+
+
 def consult_llm(history: list, system_prompt: str, config: ProviderConfig) -> LLMResponse:
     """Unified LLM request handler using a ProviderConfig object."""
-    # Resolve API key from environment variable if specified
-    env_api_key = os.environ.get(config.api_key_env_var, "") if config.api_key_env_var else ""
+    builder = RequestBuilder(config)
+    
+    # Warn if API key is missing (skip for ollama which doesn't need one)
+    env_api_key = builder.api_key()
     if not env_api_key and config.provider_type != "ollama":
         print(f"[WARNING: API key for {config.name} not found in environment variable '{config.api_key_env_var}']")
 
-    headers = {"Content-Type": "application/json"}
-    
-    # Only attach Authorization header if a key was resolved
-    if env_api_key:
-        headers["Authorization"] = f"Bearer {env_api_key}"
-
-    messages = [{"role": "system", "content": system_prompt}]
-    messages += history
-
-    payload = {
-        "model": config.model,
-        "messages": messages,
-        "stream": config.attributes.get("stream", False)
-    }
-
-    # Add response_format if specified in attributes
-    if "response_format" in config.attributes:
-        payload["response_format"] = config.attributes["response_format"]
-
-    # Only attach tools for providers that support function calling
-    formatted_tools = _format_tools_for_provider(config.tools, config.provider_type)
-    if formatted_tools:
-        payload["tools"] = formatted_tools
-
-    # Add tool_choice if specified (forces specific tool or requires a tool call)
-    if "tool_choice" in config.attributes:
-        payload["tool_choice"] = config.attributes["tool_choice"]
+    headers = builder.headers()
+    payload = builder.payload(history, system_prompt)
 
     try:
         response = _make_request_with_retry(config.url, headers=headers, payload=payload)
