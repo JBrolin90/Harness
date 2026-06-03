@@ -6,7 +6,7 @@ from systemprompt import SystemPromptManager
 from terminal_history import terminal_history_upgrade
 from provider import ProviderManager
 from tools.core_config import set_current_provider
-from memory import get_memory, load_memory_instructions
+from memory import get_memory
 from response import LLMResponse
 
 
@@ -88,23 +88,6 @@ class HarnessController:
             print(f"Bob: {full_text} [🔧 Calling: {tool_names}]")
         else:
             print(f"Bob: {full_text}")
-
-    def remember(self, section: str, item: str) -> str:
-        """Add an item to a memory section."""
-        self.memory.add(section, item)
-        return f"[Memory] Added to '{section}': {item}"
-
-    def search_memory(self, query: str) -> list[tuple[str, str]]:
-        """Search memory for items matching query."""
-        return self.memory.find(query)
-
-    def get_memory_section(self, section: str) -> list[str]:
-        """Get all items in a memory section."""
-        return self.memory.get(section)
-
-    def get_memory_instructions(self) -> str | None:
-        """Load memory instructions if available."""
-        return load_memory_instructions()
 
     def reset(self) -> None:
         """Clear conversation history to start fresh."""
