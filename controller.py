@@ -50,12 +50,23 @@ class HarnessController:
 
         print(f"\n[Task Started] {self.conversation_manager.get_stats()}")
 
-        # Get initial response
-        response = self._get_llm_response(call_llm_fn)
+        # Make LLM call
+        print(f"[Thinking with {self.current_provider.name} / {self.current_provider.model}...]")
+        response = call_llm_fn(
+            self.conversation_manager.messages,
+            self.system_prompt,
+            self.current_provider
+        )
 
-        # Process response
+        # Process and print response
+        print(f"[Model response type: {'tool_call' if response.has_tool_calls else 'text'}]")
         full_text = self.conversation_manager.clean_assistant_text(response.text)
-        self._print_response(response, full_text)
+        if response.has_tool_calls:
+            tool_names = ", ".join(tc.name for tc in response.tool_calls)
+            print(f"Bob: {full_text} [🔧 Calling: {tool_names}]")
+        else:
+            print(f"Bob: {full_text}")
+
         self.conversation_manager.add_assistant_message(
             full_text if full_text.strip() else "[Thinking...]"
         )
@@ -68,26 +79,6 @@ class HarnessController:
             system_prompt_provider=self,
             conversation_manager=self.conversation_manager
         )
-
-    def _get_llm_response(self, call_llm_fn=None) -> LLMResponse:
-        """Make an LLM call."""
-        from brain import call_llm as _call_llm
-        fn = call_llm_fn or _call_llm
-        print(f"[Thinking with {self.current_provider.name} / {self.current_provider.model}...]")
-        return fn(
-            self.conversation_manager.messages,
-            self.system_prompt,
-            self.current_provider
-        )
-
-    def _print_response(self, response: LLMResponse, full_text: str) -> None:
-        """Print model response with tool call info."""
-        print(f"[Model response type: {'tool_call' if response.has_tool_calls else 'text'}]")
-        if response.has_tool_calls:
-            tool_names = ", ".join(tc.name for tc in response.tool_calls)
-            print(f"Bob: {full_text} [🔧 Calling: {tool_names}]")
-        else:
-            print(f"Bob: {full_text}")
 
     def reset(self) -> None:
         """Clear conversation history to start fresh."""
