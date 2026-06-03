@@ -5,7 +5,7 @@ from response import LLMResponse, ToolResult, SystemError
 
 from task.constants import THINKING_PLACEHOLDER, NO_TEXT_RESPONSE
 from task.tool_engine import ToolEngine
-from task.conversation_state import ConversationState
+from task.conversation_history import ConversationHistory
 from task.repetition_detector import RepetitionDetector
 
 
@@ -15,7 +15,7 @@ class Task:
     def __init__(self, tool_engine: ToolEngine, max_iterations: int = 25):
         self.tool_engine = tool_engine
         self.max_iterations = max_iterations
-        self.conversation = ConversationState()
+        self.conversation = ConversationHistory()
 
     def run(self, prompt: str, system_prompt: str, call_llm, provider) -> str:
         self._provider = provider
@@ -28,7 +28,7 @@ class Task:
         response = call_llm(messages, system_prompt, self._provider)
 
         print(f"[Model response type: {'tool_call' if response.has_tool_calls else 'text'}]")
-        full_text = ConversationState.clean_assistant_text(response.text)
+        full_text = ConversationHistory.clean_assistant_text(response.text)
         if response.has_tool_calls:
             tool_names = ", ".join(tc.name for tc in response.tool_calls)
             print(f"Bob: {full_text} [🔧 Calling: {tool_names}]")
@@ -84,7 +84,7 @@ class Task:
 
             repetition_detector.record(
                 action_sig,
-                ConversationState.clean_assistant_text(response.text),
+                ConversationHistory.clean_assistant_text(response.text),
                 response.has_tool_calls
             )
 

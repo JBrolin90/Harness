@@ -6,46 +6,46 @@ from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from task.task import ConversationState, RepetitionDetector, Task
+from task.task import ConversationHistory, RepetitionDetector, Task
 
 
-class TestConversationState:
-    """Tests for ConversationState class."""
+class TestConversationHistory:
+    """Tests for ConversationHistory class."""
 
     def test_initial_state_empty(self):
-        """New ConversationState should have empty history."""
-        conv = ConversationState()
+        """New ConversationHistory should have empty history."""
+        conv = ConversationHistory()
         assert conv.history == []
         assert conv.messages == []
 
     def test_add_user_message(self):
         """add_user_message should append to history."""
-        conv = ConversationState()
+        conv = ConversationHistory()
         conv.add_user_message("Hello")
         assert conv.history == [{"role": "user", "content": "Hello"}]
 
     def test_add_assistant_message(self):
         """add_assistant_message should append to history."""
-        conv = ConversationState()
+        conv = ConversationHistory()
         conv.add_assistant_message("Hello Bob")
         assert conv.history == [{"role": "assistant", "content": "Hello Bob"}]
 
     def test_add_tool_result(self):
         """add_tool_result should append to history."""
-        conv = ConversationState()
+        conv = ConversationHistory()
         conv.add_tool_result("File content here")
         assert conv.history == [{"role": "tool", "content": "File content here"}]
 
     def test_clean_assistant_text_removes_tool_calls(self):
         """clean_assistant_text should strip tool call blocks."""
         text = "Some text ```tool_call\n{\"name\": \"foo\"}\n``` more text"
-        cleaned = ConversationState.clean_assistant_text(text)
+        cleaned = ConversationHistory.clean_assistant_text(text)
         assert "tool_call" not in cleaned
         assert "foo" not in cleaned
 
     def test_get_stats(self):
         """get_stats should return formatted message count."""
-        conv = ConversationState()
+        conv = ConversationHistory()
         conv.add_user_message("msg1")
         conv.add_assistant_message("msg2")
         conv.add_tool_result("msg3")
@@ -57,7 +57,7 @@ class TestConversationState:
 
     def test_reset(self):
         """reset should clear history."""
-        conv = ConversationState()
+        conv = ConversationHistory()
         conv.add_user_message("msg1")
         conv.reset()
         assert conv.history == []
@@ -126,7 +126,7 @@ class TestTask:
         assert handler.tool_engine is mock_tool_engine
 
     def test_init_creates_conversation_state(self, mock_tool_engine):
-        """__init__ should create ConversationState."""
+        """__init__ should create ConversationHistory."""
         
         handler = Task(mock_tool_engine)
         assert hasattr(handler, 'conversation')

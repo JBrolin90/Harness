@@ -2,7 +2,7 @@
 import re
 
 
-class ConversationState:
+class ConversationHistory:
     """Manages conversation history."""
 
     _TOOL_CALL_BLOCK_PATTERN = re.compile(r'```tool_call\n[\s\S]*?\n```')
@@ -24,8 +24,8 @@ class ConversationState:
     def clean_assistant_text(text: str) -> str:
         if not text:
             return ""
-        cleaned = ConversationState._TOOL_CALL_BLOCK_PATTERN.sub('', text)
-        cleaned = ConversationState._TOOL_CALL_TAG_PATTERN.sub('', cleaned)
+        cleaned = ConversationHistory._TOOL_CALL_BLOCK_PATTERN.sub('', text)
+        cleaned = ConversationHistory._TOOL_CALL_TAG_PATTERN.sub('', cleaned)
         return cleaned.strip()
 
     @property
