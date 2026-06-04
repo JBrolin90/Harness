@@ -19,6 +19,26 @@
 
 **Example**: "Check memory and create a file" → LLM calls memory_read → gets result → considers task done → doesn't call write_file
 
+### TODO: Debug logging to file
+**Problem**: During development, we needed to add debug print statements to trace LLM responses and tool execution. This pollutes stdout and makes it hard to distinguish between actual output and debug info.
+
+**Feature Request**: Implement a logging system that:
+1. Writes debug output to a configurable log file (e.g., `harness_debug.log`)
+2. Can be enabled/disabled via environment variable or CLI flag
+3. Includes timestamp, module name, and log level
+4. Doesn't interfere with normal stdout output
+
+**Example usage**:
+```bash
+HARNESS_DEBUG=1 ./bob.py  # Enables debug logging to harness_debug.log
+./bob.py  # Normal mode, no debug output
+```
+
+**Implementation ideas**:
+- Use Python's `logging` module with a custom handler
+- Add `--debug` flag to CLI
+- Configurable log file path via `HARNESS_DEBUG_LOG` env var
+
 ### TODO: Fix MiniMax tool calling format in brain.py
 The MiniMax API requires tools to be formatted as:
 ```json
