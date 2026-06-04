@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """Debug logging module for Harness.
 
 Provides configurable debug logging that writes to a file without
@@ -13,14 +15,12 @@ Usage:
     # With custom log path
     HARNESS_DEBUG_LOG=/tmp/harness.log HARNESS_DEBUG=1 python bob.py
 """
-import logging
-import os
-import sys
-from datetime import datetime
+import logging  # noqa: E402
+import os  # noqa: E402
 
 # Module-level logger instance
-_logger = None
-_debug_enabled = False
+_logger: logging.Logger | None = None
+_debug_enabled: bool = False
 
 
 def _get_default_log_path() -> str:
@@ -44,23 +44,21 @@ def setup_debug_logging(enabled: bool = True, log_path: str | None = None) -> lo
     """
     global _logger, _debug_enabled
 
+    # Ensure _logger is initialized
+    if _logger is None:
+        _logger = logging.getLogger("harness")
+        _logger.addHandler(logging.NullHandler())  # Default: no-op handler
+
     if not enabled:
         _debug_enabled = False
-        # Return a no-op logger
-        _logger = logging.getLogger("harness")
-        _logger.addHandler(logging.NullHandler())
         return _logger
 
     _debug_enabled = True
 
-    # Create logger
-    _logger = logging.getLogger("harness")
+    # Configure file handler
     _logger.setLevel(logging.DEBUG)
-
-    # Remove existing handlers to avoid duplicates
     _logger.handlers.clear()
 
-    # File handler with detailed format
     log_file = log_path or _get_default_log_path()
     file_handler = logging.FileHandler(log_file, mode='a', encoding='utf-8')
     file_handler.setLevel(logging.DEBUG)
@@ -94,6 +92,8 @@ def get_logger() -> logging.Logger:
         env_debug = os.environ.get("HARNESS_DEBUG", "0").lower() in ("1", "true", "yes")
         setup_debug_logging(enabled=env_debug)
 
+    # assert _logger is not None - after setup, it's always initialized
+    assert _logger is not None
     return _logger
 
 
