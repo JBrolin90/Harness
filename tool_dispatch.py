@@ -3,7 +3,7 @@ import json
 import re
 from tools.base_tool import BaseTool
 from response import LLMResponse, ToolResult, SystemError, NoToolFound
-from logger import debug, info, warning, error as log_error, is_debug_enabled
+from logger import debug, error as log_error, is_debug_enabled
 
 
 # ---------------------------------------------------------------------------

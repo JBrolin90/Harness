@@ -38,7 +38,8 @@ def _parse_tool_calls(message: dict) -> list[ToolCall]:
                     arguments = json.loads(arguments)
                 except json.JSONDecodeError:
                     arguments = {"_raw": arguments}
-            parsed_calls.append(ToolCall(name=name, arguments=arguments))
+            call_id = function_call.get('id', '')
+            parsed_calls.append(ToolCall(name=name, arguments=arguments, id=call_id))
         return parsed_calls
 
     # Handle tool_calls array (OpenAI / OpenRouter / MiniMax)
@@ -65,7 +66,8 @@ def _parse_tool_calls(message: dict) -> list[ToolCall]:
                 # If it's not valid JSON, treat as a malformed argument
                 arguments = {"_raw": arguments}
 
-        parsed_calls.append(ToolCall(name=name, arguments=arguments))
+        call_id = call.get('id', '')
+        parsed_calls.append(ToolCall(name=name, arguments=arguments, id=call_id))
         tool_call_count += 1
         if tool_call_count >= MAX_TOOL_CALLS:
             break
@@ -222,16 +224,23 @@ def consult_llm(history: list, system_prompt: str, config: ProviderConfig) -> LL
     if "tool_choice" in config.attributes:
         payload["tool_choice"] = config.attributes["tool_choice"]
 
-    try:
-        if is_debug_enabled():
-            debug(f"Sending request to {config.url} with model {config.model}", module="brain")
-            debug(f"Payload: {json.dumps({**payload, 'messages': f'[{len(payload["messages"])} messages]'}, indent=2)}", module="brain")
+    # Log the outgoing request (as received, before sending)
+    info(f"LLM REQUEST to {config.name} ({config.provider_type}):", module="brain")
+    info(f"URL: {config.url}", module="brain")
+    info(f"Model: {config.model}", module="brain")
+    info(f"Messages count: {len(messages)}", module="brain")
+    if formatted_tools:
+        info(f"Tools count: {len(formatted_tools)}", module="brain")
+    # Log full payload for debugging
+    info(f"Payload: {json.dumps(payload, indent=2)}", module="brain")
 
+    try:
         response = _make_request_with_retry(config.url, headers=headers, payload=payload)
         data = response.json()
 
-        if is_debug_enabled():
-            debug(f"Response received: {json.dumps(data, indent=2)[:1000]}..." if len(str(data)) > 1000 else f"Response received: {json.dumps(data, indent=2)}", module="brain")
+        # Log the raw response (as received)
+        info(f"LLM RESPONSE from {config.name}:", module="brain")
+        info(f"Raw response: {json.dumps(data, indent=2)}", module="brain")
 
         # Dispatch to provider-specific handler
         if config.provider_type == "ollama":

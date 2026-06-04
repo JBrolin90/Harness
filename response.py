@@ -1,13 +1,32 @@
 """Structured representation of LLM responses and tool calls."""
+import json
 from dataclasses import dataclass, field
 from typing import Any
 
 
 @dataclass
 class ToolCall:
-    """A single tool call with name and arguments."""
+    """A single tool call with name, id, and arguments."""
     name: str
     arguments: dict[str, Any] = field(default_factory=dict)
+    id: str = ""  # tool_call_id from the LLM response
+
+    def to_dict(self) -> dict:
+        """Convert to dict format for API messages."""
+        return {
+            "id": self.id,
+            "type": "function",
+            "function": {
+                "name": self.name,
+                "arguments": self.arguments if isinstance(self.arguments, str) else json.dumps(self.arguments)
+            }
+        }
+
+    def to_json_str(self) -> str:
+        """Convert arguments to JSON string."""
+        if isinstance(self.arguments, str):
+            return self.arguments
+        return json.dumps(self.arguments)
 
 
 @dataclass
@@ -33,6 +52,7 @@ class ToolResult:
     """Result from executing a tool."""
     tool_name: str
     output: str
+    tool_call_id: str = ""  # ID of the tool call this result responds to
     is_error: bool = False
 
     def __bool__(self) -> bool:

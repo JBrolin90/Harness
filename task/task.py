@@ -25,7 +25,9 @@ class Task:
             if response.error:
                 return f"[Error: {response.error}]"
             
-            self.conversation.add_model_response(response.text)
+            # Convert ToolCall objects to dicts for API message format
+            tool_calls_dicts = [tc.to_dict() for tc in response.tool_calls]
+            self.conversation.add_model_response(response.text, tool_calls=tool_calls_dicts)
 
             if not response.has_tool_calls:
                 return response.text
@@ -67,4 +69,4 @@ class Task:
         if output.startswith("[SYSTEM ERROR"):
             return SystemError(output)
         
-        return ToolResult(tool_name=tc.name, output=output)
+        return ToolResult(tool_name=tc.name, output=output, tool_call_id=tc.id)
