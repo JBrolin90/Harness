@@ -3,6 +3,7 @@ import json
 import re
 from tools.base_tool import BaseTool
 from response import LLMResponse, ToolResult, SystemError, NoToolFound
+from logger import debug, info, warning, error as log_error, is_debug_enabled
 
 
 # ---------------------------------------------------------------------------
@@ -301,7 +302,7 @@ def dispatch_with_text_parsing(response: LLMResponse) -> ToolResult | SystemErro
             if call:
                 return _execute_call(call["name"], call["arguments"])
         except Exception as e:
-            print(f"[DEBUG] Parser '{parser_name}' failed: {e}")
+            debug(f"Parser '{parser_name}' failed: {e}", module="tool_dispatch")
             continue
 
     return NoToolFound()
@@ -309,7 +310,10 @@ def dispatch_with_text_parsing(response: LLMResponse) -> ToolResult | SystemErro
 
 def _execute_call(tool_name: str, arguments: dict) -> ToolResult | SystemError:
     """Internal helper to execute a tool and wrap the result."""
-    print(f"\n[🔧 Harness executing: {tool_name}]")
+    if is_debug_enabled():
+        debug(f"Executing tool: {tool_name} with args: {json.dumps(arguments)}", module="tool_dispatch")
+    else:
+        print(f"\n[🔧 Harness executing: {tool_name}]")
     try:
         output = _safe_dispatch(tool_name, arguments)
     except (TypeError, KeyError, ValueError) as e:
@@ -317,10 +321,15 @@ def _execute_call(tool_name: str, arguments: dict) -> ToolResult | SystemError:
         return SystemError(f"[SYSTEM ERROR: Invalid arguments for '{tool_name}': {e}]")
     except Exception as e:
         # Catch any other unexpected exceptions to prevent crashes
+        log_error(f"Unexpected error in '{tool_name}': {e}", module="tool_dispatch")
         return SystemError(f"[SYSTEM ERROR: Unexpected error in '{tool_name}': {e}]")
 
     if output.startswith("[SYSTEM ERROR"):
+        log_error(f"Tool '{tool_name}' returned system error: {output}", module="tool_dispatch")
         return SystemError(output)
+
+    if is_debug_enabled():
+        debug(f"Tool '{tool_name}' completed successfully, output length: {len(output)}", module="tool_dispatch")
 
     return ToolResult(tool_name, output)
 
