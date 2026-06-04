@@ -2,7 +2,7 @@ import argparse
 from session.session_manager import SessionManager
 from terminal_history import terminal_history_upgrade
 from task.constants import NO_TEXT_RESPONSE
-from logger import setup_debug_logging, get_logger
+from logger import setup_debug_logging
 
 VERSION = "0.3.0"
 
