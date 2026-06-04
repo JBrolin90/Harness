@@ -28,10 +28,15 @@ class ConversationHistory:
     def add_model_response(self, text: str) -> None:
         """Add model (assistant) response, stripping tool call artifacts."""
         cleaned = self._clean_text(text)
-        self.add_assistant_message(cleaned if cleaned.strip() else THINKING_PLACEHOLDER)
+        # Only use placeholder if original text had content that got cleaned away
+        # An empty text is a genuine empty response, not a placeholder situation
+        if text.strip() and not cleaned:
+            self.add_assistant_message(THINKING_PLACEHOLDER)
+        else:
+            self.add_assistant_message(cleaned if cleaned else "")
 
-    def add_tool_result(self, result) -> bool:
-        """Add tool result. Returns True if added successfully (no repetition), False to stop."""
+    def add_tool_result(self, result) -> None:
+        """Add tool result to conversation history. Raises RepetitionError if LLM is repeating."""
         match result:
             case _ if hasattr(result, 'tool_name') and hasattr(result, 'output'):
                 result_str = str(result.output) if result.tool_name == "system" else f"Observation: {str(result.output)}"
@@ -45,11 +50,12 @@ class ConversationHistory:
         # Check last assistant message for repetition
         last_msg = next((m for m in reversed(self.history) if m["role"] == "assistant"), None)
         if last_msg:
-            return not self._repetition_detector.check_after_tool_result(
+            if self._repetition_detector.check_after_tool_result(
                 text=last_msg["content"],
                 has_tool_calls=True
-            )
-        return True
+            ):
+                from response import RepetitionError
+                raise RepetitionError("LLM repetition detected")
 
     @staticmethod
     def _clean_text(text: str) -> str:

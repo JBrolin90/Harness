@@ -173,10 +173,13 @@ class TestHandleOpenaiStyleResponse:
         assert result.error is not None
 
     def test_empty_choices_array(self):
-        """Empty choices array returns error response."""
+        """Empty choices array returns empty response (graceful handling)."""
         result = _handle_openai_style_response({"choices": []})
         assert isinstance(result, LLMResponse)
-        assert result.error is not None
+        # Empty choices is treated as empty response, not an error
+        assert result.text == ""
+        assert result.tool_calls == []
+        assert result.error is None
 
     def test_message_is_none(self):
         """choices[0].message is None returns error response."""

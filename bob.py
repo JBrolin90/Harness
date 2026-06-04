@@ -1,6 +1,7 @@
 import argparse
 from session.session_manager import SessionManager
 from terminal_history import terminal_history_upgrade
+from task.constants import NO_TEXT_RESPONSE
 
 VERSION = "0.3.0"
 
@@ -25,7 +26,9 @@ def main():
         user_input = input("\nJoachim: ")
         if user_input.lower() == "exit":
             break
-        session.run_task(user_input)
+        result = session.run_task(user_input)
+        if result and result != NO_TEXT_RESPONSE:
+            print(f"\nBob: {result}")
 
 
 if __name__ == "__main__":

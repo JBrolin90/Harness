@@ -134,7 +134,7 @@ def _make_request_with_retry(url: str, headers: dict, payload: dict, max_retries
     """
     import time
     
-    retryable_statuses = {429, 500, 502, 503, 504}
+    retryable_statuses = {429, 500, 502, 503, 504, 529}
     last_exception = None
     
     for attempt in range(max_retries):
@@ -202,8 +202,11 @@ def consult_llm(history: list, system_prompt: str, config: ProviderConfig) -> LL
     payload = {
         "model": config.model,
         "messages": messages,
-        "stream": config.attributes.get("stream", False)
     }
+    
+    # Only attach stream if explicitly set to true
+    if config.attributes.get("stream"):
+        payload["stream"] = True
 
     # Add response_format if specified in attributes
     if "response_format" in config.attributes:
@@ -251,13 +254,21 @@ def _handle_response(data: dict, message_key: str = "choices[0].message") -> LLM
     # Navigate to message using dot notation
     parts = message_key.split(".")
     message = data
-    for part in parts:
+    for i, part in enumerate(parts):
         # Handle list indexing like choices[0]
         if "[" in part and part.endswith("]"):
             key, idx_str = part.split("[")
             idx = int(idx_str.rstrip("]"))
-            if isinstance(message, dict) and key in message and isinstance(message[key], list) and len(message[key]) > idx:
-                message = message[key][idx]
+            if isinstance(message, dict) and key in message:
+                arr = message[key]
+                # Handle None or empty array gracefully - treat as empty response
+                if arr is None or (isinstance(arr, list) and len(arr) == 0):
+                    # Empty choices after tool execution
+                    return LLMResponse(text="", tool_calls=[])
+                if isinstance(arr, list) and len(arr) > idx:
+                    message = arr[idx]
+                else:
+                    return LLMResponse(error=f"[BRAIN ERROR: Missing '{message_key}' in response]")
             else:
                 return LLMResponse(error=f"[BRAIN ERROR: Missing '{message_key}' in response]")
         elif isinstance(message, dict) and part in message:
@@ -275,8 +286,9 @@ def _handle_response(data: dict, message_key: str = "choices[0].message") -> LLM
     if "choices" in data and isinstance(data["choices"], list) and len(data["choices"]) > 0:
         choice = data["choices"][0]
         finish_reason = choice.get("finish_reason") if isinstance(choice, dict) else None
-        if tool_calls and finish_reason == "length":
-            print("[BRAIN WARNING: Response may be truncated - finish_reason is 'length' with tool_calls]")
+    
+    if tool_calls and finish_reason == "length":
+        print("[BRAIN WARNING: Response may be truncated - finish_reason is 'length' with tool_calls]")
     
     return LLMResponse(
         text=_get_content(message),

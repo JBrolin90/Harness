@@ -2,6 +2,23 @@
 
 ## In Progress
 
+### TODO: LLM response handling when tool calls are present
+**Problem**: When an LLM responds with both text AND tool calls (e.g., "Hello! Let me check my memory" + memory_read tool), the system was only processing the first tool call. Subsequent iterations would fail with empty responses, and Bob would not respond.
+
+**Root Cause**: MiniMax (and possibly other providers) sometimes returns empty responses after tool execution, causing the loop to exit without a final text response.
+
+**What We Fixed**:
+1. Added 529 (overload) to retryable HTTP status codes
+2. Gracefully handle empty/None `choices` in `_handle_response()` - return empty text instead of error
+3. When LLM returns empty text after tool calls, fall back to last assistant message in conversation history
+4. Process ALL tool calls in a response (0..n loop) instead of just the first one
+5. Use `RepetitionError` exception for loop control instead of boolean return
+6. Added `initial_response_text` fallback when LLM doesn't complete the response
+
+**Remaining Issue**: When an LLM makes multiple tool calls in sequence (e.g., memory_read then write_file), it sometimes considers the task complete after the first tool call and returns empty on the next iteration. The LLM needs to understand compound tasks as a single unit. This is a model behavior issue, not a code bug.
+
+**Example**: "Check memory and create a file" → LLM calls memory_read → gets result → considers task done → doesn't call write_file
+
 ### TODO: Fix MiniMax tool calling format in brain.py
 The MiniMax API requires tools to be formatted as:
 ```json

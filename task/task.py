@@ -2,6 +2,7 @@
 from task.constants import NO_TEXT_RESPONSE
 from task.execute_tools import ExecuteTools
 from session.conversation_history import ConversationHistory
+from response import LLMResponse, ToolCall, ToolResult, SystemError, RepetitionError
 
 
 class Task:
@@ -16,16 +17,55 @@ class Task:
         self._provider = provider
         self.conversation.add_user_message(prompt)
 
-        while True:
+        iteration = 0
+        while iteration < self.max_iterations:
+            iteration += 1
             response = consult_llm(self.conversation.messages, system_prompt, self._provider)
+            
+            if response.error:
+                return f"[Error: {response.error}]"
+            
             self.conversation.add_model_response(response.text)
 
             if not response.has_tool_calls:
                 return response.text
 
-            result = self.execute_tools(response)
+            # Execute tool(s) and continue loop
+            try:
+                self._handle_tools(response)
+            except RepetitionError:
+                breakYes
 
-            if not self.conversation.add_tool_result(result):
+        # Exit loop without final response - use last assistant message from history
+        messages = self.conversation.messages
+        for i in range(len(messages) - 1, -1, -1):
+            msg = messages[i]
+            if msg["role"] == "assistant" and msg["content"].strip():
+                return msg["content"]
+        
+        return NO_TEXT_RESPONSE
+    
+    def _handle_tools(self, response: LLMResponse) -> None:
+        """Handle all tool call(s) from LLM response. Raises RepetitionError if detected."""
+        from response import RepetitionError
+        for tc in response.tool_calls:
+            result = self._execute_tool(tc)
+            if isinstance(result, SystemError):
                 break
-
-        return response.text if response.text else NO_TEXT_RESPONSE
+            self.conversation.add_tool_result(result)
+    
+    def _execute_tool(self, tc: ToolCall) -> ToolResult | SystemError:
+        """Execute a single tool call and return the result."""
+        print(f"\n[🔧 Harness executing: {tc.name}]")
+        try:
+            from tools.base_tool import BaseTool
+            output = BaseTool.dispatch(tc.name, tc.arguments)
+        except (TypeError, KeyError, ValueError) as e:
+            return SystemError(f"[SYSTEM ERROR: Invalid arguments for '{tc.name}': {e}]")
+        except Exception as e:
+            return SystemError(f"[SYSTEM ERROR: Unexpected error in '{tc.name}': {e}]")
+        
+        if output.startswith("[SYSTEM ERROR"):
+            return SystemError(output)
+        
+        return ToolResult(tool_name=tc.name, output=output)

@@ -58,6 +58,11 @@ class SystemError:
         return self.message
 
 
+class RepetitionError(Exception):
+    """Raised when LLM repetition is detected - loop should stop."""
+    pass
+
+
 @dataclass
 class NoToolFound:
     """No tool call found in response - loop should stop."""
