@@ -4,6 +4,7 @@ import os
 import requests
 from provider import ProviderConfig
 from response import LLMResponse, ToolCall
+from logger import debug, info, warning, error as log_error, is_debug_enabled
 
 
 MAX_TOOL_CALLS = 50
@@ -154,23 +155,23 @@ def _make_request_with_retry(url: str, headers: dict, payload: dict, max_retries
                 else:
                     # Exponential backoff: 1s, 2s, 4s, ...
                     wait_time = 2 ** attempt
-                print(f"[BRAIN] Rate limited. Waiting {wait_time}s before retry {attempt + 1}/{max_retries}...")
+                warning(f"Rate limited. Waiting {wait_time}s before retry {attempt + 1}/{max_retries}...", module="brain")
             else:
                 # Server error - exponential backoff
                 wait_time = 2 ** attempt
-                print(f"[BRAIN] Server error {response.status_code}. Retrying in {wait_time}s ({attempt + 1}/{max_retries})...")
+                warning(f"Server error {response.status_code}. Retrying in {wait_time}s ({attempt + 1}/{max_retries})...", module="brain")
             
             time.sleep(wait_time)
             last_exception = requests.HTTPError(response=response)
             
         except requests.exceptions.ConnectionError as e:
             wait_time = 2 ** attempt
-            print(f"[BRAIN] Connection error. Retrying in {wait_time}s ({attempt + 1}/{max_retries})...")
+            warning(f"Connection error. Retrying in {wait_time}s ({attempt + 1}/{max_retries})...", module="brain")
             time.sleep(wait_time)
             last_exception = e
         except requests.exceptions.Timeout as e:
             wait_time = 2 ** attempt
-            print(f"[BRAIN] Request timeout. Retrying in {wait_time}s ({attempt + 1}/{max_retries})...")
+            warning(f"Request timeout. Retrying in {wait_time}s ({attempt + 1}/{max_retries})...", module="brain")
             time.sleep(wait_time)
             last_exception = e
         except Exception:
@@ -222,8 +223,15 @@ def consult_llm(history: list, system_prompt: str, config: ProviderConfig) -> LL
         payload["tool_choice"] = config.attributes["tool_choice"]
 
     try:
+        if is_debug_enabled():
+            debug(f"Sending request to {config.url} with model {config.model}", module="brain")
+            debug(f"Payload: {json.dumps({**payload, 'messages': f'[{len(payload["messages"])} messages]'}, indent=2)}", module="brain")
+
         response = _make_request_with_retry(config.url, headers=headers, payload=payload)
         data = response.json()
+
+        if is_debug_enabled():
+            debug(f"Response received: {json.dumps(data, indent=2)[:1000]}..." if len(str(data)) > 1000 else f"Response received: {json.dumps(data, indent=2)}", module="brain")
 
         # Dispatch to provider-specific handler
         if config.provider_type == "ollama":
@@ -234,13 +242,13 @@ def consult_llm(history: list, system_prompt: str, config: ProviderConfig) -> LL
     except requests.HTTPError as e:
         status = e.response.status_code if e.response is not None else "unknown"
         text = e.response.text if e.response is not None else "no response body"
-        print(f"[BRAIN HTTP ERROR: {status} {text}]")
+        log_error(f"HTTP ERROR: {status} {text[:200]}", module="brain")
         return LLMResponse(error=f"[BRAIN ERROR: HTTP {status}]")
     except json.JSONDecodeError as e:
-        print(f"[BRAIN JSON ERROR: {e}]")
+        log_error(f"JSON ERROR: {e}", module="brain")
         return LLMResponse(error="[BRAIN ERROR: Invalid JSON response from API]")
     except Exception as e:
-        print(f"[BRAIN ERROR: {e}]")
+        log_error(f"Unexpected error: {e}", module="brain")
         return LLMResponse(error=f"[BRAIN ERROR: {e}]")
 
 
@@ -288,7 +296,7 @@ def _handle_response(data: dict, message_key: str = "choices[0].message") -> LLM
         finish_reason = choice.get("finish_reason") if isinstance(choice, dict) else None
     
     if tool_calls and finish_reason == "length":
-        print("[BRAIN WARNING: Response may be truncated - finish_reason is 'length' with tool_calls]")
+        warning("Response may be truncated - finish_reason is 'length' with tool_calls", module="brain")
     
     return LLMResponse(
         text=_get_content(message),

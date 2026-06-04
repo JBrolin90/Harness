@@ -21,6 +21,9 @@ A lightweight, modular ReAct-style autonomous agent framework. It supports multi
 ### Multi-Provider Support
 Seamlessly switch between local models (Ollama) and cloud APIs (MiniMax, OpenRouter). Provider configs are stored in `providers.json` with attributes for fine-grained control.
 
+### Debug Logging
+Configurable debug logging to file (`harness_debug.log`) without polluting stdout. Enable via `--debug` flag or `HARNESS_DEBUG` environment variable. Includes timestamp, module name, and log level.
+
 ### Structured Native Tool Calling
 Large/cloud models (MiniMax-M2.7, gemma4:e4b) use the API's native `tool_calls` structure — the model outputs structured JSON, not text to be parsed. This is the preferred mode for models that support it.
 
@@ -133,6 +136,9 @@ python bob.py --provider gemma4-4b-ollama   # gemma4:e4b (structured tool calls)
 python bob.py                           # defaults to cloud-pro
 python bob.py --provider local-coder     # Ollama qwen2.5-coder:7b
 python bob.py --provider gemma4-4b-ollama
+python bob.py --debug                    # Enable debug logging to harness_debug.log
+HARNESS_DEBUG=1 python bob.py           # Enable via environment variable
+HARNESS_DEBUG_LOG=/tmp/my.log python bob.py  # Custom log file path
 ```
 
 ### Programmatic
@@ -325,6 +331,11 @@ Harness/
 │   ├── memory_tool.py            # Memory operations
 │   └── core_config.py            # set_current_provider helper
 │
+├── memory.md                       # Project-specific instructions (auto-ingested)
+├── logger.py                       # Debug logging module
+│                                  # - setup_debug_logging() for file output
+│                                  # - debug/info/warning/error convenience functions
+│                                  # - HARNESS_DEBUG and HARNESS_DEBUG_LOG env vars
 ├── requirements.txt
 └── README.md
 ```
