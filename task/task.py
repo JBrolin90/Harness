@@ -34,7 +34,7 @@ class Task:
             try:
                 self._handle_tools(response)
             except RepetitionError:
-                breakYes
+                break
 
         # Exit loop without final response - use last assistant message from history
         messages = self.conversation.messages
@@ -47,7 +47,6 @@ class Task:
     
     def _handle_tools(self, response: LLMResponse) -> None:
         """Handle all tool call(s) from LLM response. Raises RepetitionError if detected."""
-        from response import RepetitionError
         for tc in response.tool_calls:
             result = self._execute_tool(tc)
             if isinstance(result, SystemError):
