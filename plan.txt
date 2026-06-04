@@ -2,68 +2,38 @@
 
 ## In Progress
 
-### TODO: LLM response handling when tool calls are present
-**Problem**: When an LLM responds with both text AND tool calls (e.g., "Hello! Let me check my memory" + memory_read tool), the system was only processing the first tool call. Subsequent iterations would fail with empty responses, and Bob would not respond.
-
-**Root Cause**: MiniMax (and possibly other providers) sometimes returns empty responses after tool execution, causing the loop to exit without a final text response.
-
-**What We Fixed**:
-1. Added 529 (overload) to retryable HTTP status codes
-2. Gracefully handle empty/None `choices` in `_handle_response()` - return empty text instead of error
-3. When LLM returns empty text after tool calls, fall back to last assistant message in conversation history
-4. Process ALL tool calls in a response (0..n loop) instead of just the first one
-5. Use `RepetitionError` exception for loop control instead of boolean return
-6. Added `initial_response_text` fallback when LLM doesn't complete the response
-
-**Remaining Issue**: When an LLM makes multiple tool calls in sequence (e.g., memory_read then write_file), it sometimes considers the task complete after the first tool call and returns empty on the next iteration. The LLM needs to understand compound tasks as a single unit. This is a model behavior issue, not a code bug.
-
-**Example**: "Check memory and create a file" → LLM calls memory_read → gets result → considers task done → doesn't call write_file
-
-### TODO: Debug logging to file
-**Problem**: During development, we needed to add debug print statements to trace LLM responses and tool execution. This pollutes stdout and makes it hard to distinguish between actual output and debug info.
-
-**Feature Request**: Implement a logging system that:
-1. Writes debug output to a configurable log file (e.g., `harness_debug.log`)
-2. Can be enabled/disabled via environment variable or CLI flag
-3. Includes timestamp, module name, and log level
-4. Doesn't interfere with normal stdout output
-
-**Example usage**:
-```bash
-HARNESS_DEBUG=1 ./bob.py  # Enables debug logging to harness_debug.log
-./bob.py  # Normal mode, no debug output
-```
-
-**Implementation ideas**:
-- Use Python's `logging` module with a custom handler
-- Add `--debug` flag to CLI
-- Configurable log file path via `HARNESS_DEBUG_LOG` env var
-
-### TODO: Fix MiniMax tool calling format in brain.py
-The MiniMax API requires tools to be formatted as:
-```json
-{"type": "function", "function": {...}}
-```
-
-But brain.py currently passes tools as-is to all providers. We need to:
-1. Detect when provider_type is "minimax"
-2. Automatically wrap each tool in `{"type": "function", "function": ...}` before sending
-
-This is required for `cloud-pro` (MiniMax-M2.7) to work with tool calling.
+*(No items currently in progress)*
 
 ## Completed
 
-- [x] Implement native function calling support (structured LLMResponse)
-- [x] Add LLM compatibility test script (test_llm_compatibility.py)
-- [x] Test all 11 providers with tool calling prompts
-- [x] Fix _execute_call to catch TypeError, KeyError, ValueError, and general Exception
-- [x] Add _check_multi_tool_call to detect multiple tool calls and return SystemError requiring user confirmation
+- [x] LLM response handling when tool calls are present
+  - Added 529 (overload) to retryable HTTP status codes
+  - Gracefully handle empty/None `choices` in `_handle_response()`
+  - When LLM returns empty text after tool calls, fall back to last assistant message
+  - Process ALL tool calls in a response (0..n loop) instead of just the first one
+  - Use `RepetitionError` exception for loop control instead of boolean return
+
+- [x] Debug logging to file
+  - Implemented via `logger.py` module
+  - Enabled via `HARNESS_DEBUG=1` environment variable or `--debug` CLI flag
+  - Log file path configurable via `HARNESS_DEBUG_LOG` env var
+  - Uses Python's `logging` module with timestamp, module name, and log level
+  - Does not interfere with stdout output
+
+- [x] Fix MiniMax tool calling compatibility
+  - MiniMax requires `tool_call_id` in tool results to match the `id` in the preceding assistant message's `tool_calls` array
+  - Added `id` field to `ToolCall` dataclass in `response.py`
+  - Added `to_dict()` method to convert `ToolCall` to API message format
+  - Modified `brain.py` to extract `id` when parsing tool_calls
+  - Modified `task/task.py` to pass tool_calls when adding model response
+  - Modified `conversation_history.py` to store tool_calls in assistant messages
+  - This fixes error 2013: "tool result's tool id not found"
 
 ## Provider Status Summary
 
 | Provider | Tool Calls | Notes |
 |----------|------------|-------|
-| cloud-pro | ✅ 3/3 | Requires special format in brain.py |
+| cloud-pro | ✅ 3/3 | MiniMax-M2.7 with tool_call_id tracking |
 | deepseek-free | ✅ 2/3 | OpenRouter |
 | qwen2.5-coder-14b | ✅ 2/3 | Ollama |
 | qwen2.5-coder-7b-instruct-q8 | ✅ 2/3 | Ollama |
