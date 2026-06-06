@@ -85,7 +85,7 @@ def consult_llm(history: list, system_prompt: str, config: ProviderConfig) -> LL
         return _make_error_response(str(e))
 
 
-def _navigate_to_message(data: dict, message_key: str) -> dict | None:
+def _navigate_to_message(data: dict, message_key: str) -> dict | None | str:
     """Navigate to message using dot-notation path.
     
     Args:
@@ -93,7 +93,8 @@ def _navigate_to_message(data: dict, message_key: str) -> dict | None:
         message_key: Dot-notation path (e.g., "choices[0].message" or "message").
     
     Returns:
-        Message dict if found, None if path doesn't exist.
+        Message dict if found, None if path doesn't exist,
+        or special sentinel for empty choices.
     """
     parts = message_key.split(".")
     current = data
@@ -101,8 +102,15 @@ def _navigate_to_message(data: dict, message_key: str) -> dict | None:
         if "[" in part and part.endswith("]"):
             key, idx_str = part.split("[")
             idx = int(idx_str.rstrip("]"))
-            if isinstance(current, dict) and key in current and isinstance(current[key], list) and len(current[key]) > idx:
-                current = current[key][idx]
+            if isinstance(current, dict) and key in current:
+                arr = current[key]
+                # Handle empty choices array - treat as empty response (not error)
+                if arr is None or (isinstance(arr, list) and len(arr) == 0):
+                    return "__EMPTY_CHOICES__"
+                if isinstance(arr, list) and len(arr) > idx:
+                    current = arr[idx]
+                else:
+                    return None
             else:
                 return None
         elif isinstance(current, dict) and part in current:
@@ -130,6 +138,10 @@ def _extract_message_at_path(data: dict, message_key: str, provider_type: str) -
         provider_type: Provider identifier to select appropriate tool call parser.
     """
     message = _navigate_to_message(data, message_key)
+    
+    # Handle empty choices - return empty response (not an error)
+    if message == "__EMPTY_CHOICES__":
+        return LLMResponse(text="", tool_calls=[])
     
     if message is None:
         return _make_error_response(f"Missing '{message_key}' in response")

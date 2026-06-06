@@ -1,0 +1,56 @@
+# Harness Project
+
+## Current Branch: merge-brain
+
+## Merge Status (2026-06-07)
+
+### Branches Merged
+- `dev-Laptop` → bugfixes and improvements
+- `dev-Desktop` → heavy refactoring (via `refactor/brain-py-improvements`)
+
+### What's Preserved
+
+**From dev-Laptop:**
+- `logger.py` + `test_logger.py` — structured logging system
+- `tool_call_id` tracking for MiniMax compatibility
+- `529` in retryable statuses
+- Logging calls in `tool_dispatch.py`
+
+**From dev-Desktop / refactor/brain-py-improvements:**
+- `llm/` package with SRP-separated modules:
+  - `llm/brain.py` — main LLM handler
+  - `llm/request_builder.py` — builds API requests
+  - `llm/retry_handler.py` — handles retries
+  - `llm/tool_call_parser.py` — parses tool calls
+  - `llm/response.py` — response types
+  - `llm/provider.py` — provider config with `ProviderType` enum
+
+### Known Issues
+- `tests/test_llm_compatibility.py` has pre-existing import error (`build_system_prompt` not found in `systemprompt.py`)
+
+### Bug Fixes
+- **tool_call_id not extracted**: Fixed `llm/tool_call_parser.py` to extract and pass `id` field from tool calls. MiniMax requires this for tool result messages.
+
+### Directory Structure
+```
+llm/
+├── brain.py
+├── provider.py
+├── request_builder.py
+├── response.py
+├── retry_handler.py
+└── tool_call_parser.py
+```
+
+## Test Status
+- 220 tests passing (excluding `test_llm_compatibility.py`)
+
+## Bob Status
+- ✅ Working correctly after `tool_call_id` fix
+- Bob can review code and provide detailed feedback
+
+## Pending Refactoring (see plan.txt)
+- Logger.py thread-safety issues (use LoggerAdapter or try/finally)
+
+## Documentation
+- ✅ readme.md updated to reflect current `llm/` package structure
