@@ -1,7 +1,7 @@
 """Protocol for tool execution engines."""
 from typing import Protocol
 
-from response import LLMResponse, ToolResult, SystemError
+from llm.response import LLMResponse, ToolResult, SystemError
 
 
 class ExecuteTools(Protocol):

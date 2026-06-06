@@ -2,7 +2,7 @@
 from task.task import Task
 from tool_manager import ToolManager
 from systemprompt import SystemPromptManager
-from provider import ProviderManager
+from llm.provider import ProviderManager
 from tools.core_config import set_current_provider
 
 
@@ -20,7 +20,7 @@ class SessionManager:
 
     def run_task(self, prompt: str, max_iterations: int = 25, consult_llm=None) -> str:
         """Execute a task with the given prompt."""
-        from brain import consult_llm as _consult_llm
+        from llm.brain import consult_llm as _consult_llm
         consult_llm_fn = consult_llm or _consult_llm
 
         system_prompt = self.system_prompt_manager.get_system_prompt()

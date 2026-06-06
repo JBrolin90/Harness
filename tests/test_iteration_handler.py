@@ -68,7 +68,7 @@ class TestRepetitionDetector:
 
     def test_no_repetition_on_first_check(self):
         """is_repetitive should return False on first check."""
-        from response import LLMResponse
+        from llm.response import LLMResponse
         
         detector = RepetitionDetector()
         response = LLMResponse(text="Hello")
@@ -76,7 +76,7 @@ class TestRepetitionDetector:
 
     def test_repetition_detected_for_same_action(self):
         """is_repetitive should detect repeated tool calls."""
-        from response import LLMResponse, ToolCall
+        from llm.response import LLMResponse, ToolCall
         
         detector = RepetitionDetector()
         response1 = LLMResponse(
@@ -135,7 +135,7 @@ class TestTask:
 
     def test_execute_no_tool_call(self, mock_provider, mock_execute_tools):
         """run should return text immediately if no tool call."""
-        from response import LLMResponse
+        from llm.response import LLMResponse
         
         handler = Task(mock_execute_tools)
         
@@ -149,7 +149,7 @@ class TestTask:
 
     def test_execute_with_tool_call_triggers_loop(self, mock_provider, mock_execute_tools):
         """run should trigger loop when tool call detected."""
-        from response import LLMResponse, NoToolFound
+        from llm.response import LLMResponse, NoToolFound
         
         handler = Task(mock_execute_tools)
         
@@ -182,7 +182,7 @@ class TestTaskIntegration:
 
     def test_execute_accumulates_in_conversation(self, mock_provider):
         """run should add messages to conversation."""
-        from response import LLMResponse
+        from llm.response import LLMResponse
         
         handler = Task(MagicMock())
         

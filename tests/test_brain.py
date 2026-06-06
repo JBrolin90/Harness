@@ -5,10 +5,11 @@ import sys
 import os
 from unittest.mock import patch, MagicMock
 
-sys.path.insert(0, os.path.dirname(__file__))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'llm'))
 
-from brain import _parse_tool_calls, _get_content, consult_llm, _handle_openai_style_response, _handle_ollama_response
-from response import LLMResponse, ToolCall
+from llm.brain import _parse_tool_calls, _extract_text_content, _handle_openai_response, _handle_ollama_response, consult_llm
+from llm.response import LLMResponse, ToolCall
+from llm.provider import ProviderType
 
 
 class TestParseToolCalls:
@@ -107,28 +108,28 @@ class TestParseToolCalls:
         assert result[1].name == "bash"
 
 
-class TestGetContent:
-    """Tests for _get_content helper."""
+class TestExtractTextContent:
+    """Tests for _extract_text_content helper."""
 
     def test_none_message_returns_empty_string(self):
         """None message should return empty string."""
-        assert _get_content(None) == ""
+        assert _extract_text_content(None) == ""
 
     def test_empty_dict_returns_empty_string(self):
         """Empty dict should return empty string."""
-        assert _get_content({}) == ""
+        assert _extract_text_content({}) == ""
 
     def test_content_as_string(self):
         """Content as normal string."""
-        assert _get_content({"content": "Hello world"}) == "Hello world"
+        assert _extract_text_content({"content": "Hello world"}) == "Hello world"
 
     def test_content_is_none(self):
         """Content key present but None should return empty string."""
-        assert _get_content({"content": None}) == ""
+        assert _extract_text_content({"content": None}) == ""
 
 
-class TestHandleOpenaiStyleResponse:
-    """Tests for _handle_openai_style_response."""
+class TestHandleOpenaiResponse:
+    """Tests for _handle_openai_response."""
 
     def test_text_only_response(self):
         """Simple text response with no tool call."""
@@ -139,7 +140,7 @@ class TestHandleOpenaiStyleResponse:
                 }
             }]
         }
-        result = _handle_openai_style_response(data)
+        result = _handle_openai_response(data)
         assert isinstance(result, LLMResponse)
         assert result.text == "Hello, how can I help you?"
         assert result.tool_calls == []
@@ -160,7 +161,7 @@ class TestHandleOpenaiStyleResponse:
                 }
             }]
         }
-        result = _handle_openai_style_response(data)
+        result = _handle_openai_response(data)
         assert isinstance(result, LLMResponse)
         assert len(result.tool_calls) == 1
         assert result.tool_calls[0].name == "read_file"
@@ -168,19 +169,19 @@ class TestHandleOpenaiStyleResponse:
 
     def test_missing_choices_key(self):
         """Missing choices key returns error response."""
-        result = _handle_openai_style_response({})
+        result = _handle_openai_response({})
         assert isinstance(result, LLMResponse)
         assert result.error is not None
 
     def test_empty_choices_array(self):
         """Empty choices array returns error response."""
-        result = _handle_openai_style_response({"choices": []})
+        result = _handle_openai_response({"choices": []})
         assert isinstance(result, LLMResponse)
         assert result.error is not None
 
     def test_message_is_none(self):
         """choices[0].message is None returns error response."""
-        result = _handle_openai_style_response({"choices": [{"message": None}]})
+        result = _handle_openai_response({"choices": [{"message": None}]})
         assert isinstance(result, LLMResponse)
         assert result.error is not None
 
@@ -246,7 +247,7 @@ class TestCallLlm:
         """Create a mock ProviderConfig."""
         provider = MagicMock()
         provider.name = "test-provider"
-        provider.provider_type = "openai"
+        provider.provider_type = ProviderType.OPENAI
         provider.url = "https://api.test.com/v1/chat/completions"
         provider.api_key_env_var = "TEST_API_KEY"
         provider.model = "gpt-4"
@@ -254,7 +255,7 @@ class TestCallLlm:
         provider.tools = None
         return provider
 
-    @patch('brain.requests.post')
+    @patch('llm.brain.requests.post')
     def test_successful_text_response(self, mock_post, mock_provider):
         """Successful response with text content."""
         mock_post.return_value.status_code = 200
@@ -272,7 +273,7 @@ class TestCallLlm:
         assert result.text == "The capital of France is Paris."
         mock_post.assert_called_once()
 
-    @patch('brain.requests.post')
+    @patch('llm.brain.requests.post')
     def test_successful_tool_call_response(self, mock_post, mock_provider):
         """Successful response with tool call."""
         mock_post.return_value.status_code = 200
@@ -297,7 +298,7 @@ class TestCallLlm:
         assert result.tool_calls[0].name == "bash"
         assert result.tool_calls[0].arguments["command"] == "whoami"
 
-    @patch('brain.requests.post')
+    @patch('llm.brain.requests.post')
     def test_http_error_handling(self, mock_post, mock_provider):
         """HTTP errors are caught and returned as error response."""
         mock_post.side_effect = Exception("HTTP 401 Unauthorized")
@@ -307,13 +308,13 @@ class TestCallLlm:
         assert isinstance(result, LLMResponse)
         assert result.error is not None
 
-    @patch('brain.requests.post')
+    @patch('llm.brain.requests.post')
     @patch.dict(os.environ, {"TEST_API_KEY": "fake-key"})
     def test_ollama_provider(self, mock_post):
         """Ollama provider uses different response format."""
         ollama_provider = MagicMock()
         ollama_provider.name = "local-ollama"
-        ollama_provider.provider_type = "ollama"
+        ollama_provider.provider_type = ProviderType.OLLAMA
         ollama_provider.url = "http://localhost:11434/api/chat"
         ollama_provider.api_key_env_var = ""
         ollama_provider.model = "llama3"
@@ -332,7 +333,7 @@ class TestCallLlm:
         assert isinstance(result, LLMResponse)
         assert result.text == "Hello from Ollama"
 
-    @patch('brain.requests.post')
+    @patch('llm.brain.requests.post')
     @patch.dict(os.environ, {})
     def test_missing_api_key_warning(self, mock_post, mock_provider):
         """Missing API key triggers a warning but still tries the request."""
@@ -348,7 +349,7 @@ class TestCallLlm:
         assert isinstance(result, LLMResponse)
         assert result.text == "Response"
 
-    @patch('brain.requests.post')
+    @patch('llm.brain.requests.post')
     def test_tools_are_sent_in_payload(self, mock_post, mock_provider):
         """Tools are included in the request payload."""
         mock_provider.tools = [
@@ -372,7 +373,7 @@ class TestFormatToolsForProvider:
 
     def test_unwrapped_tools_get_wrapped_for_minimax(self):
         """Unwrapped tools should be wrapped for MiniMax provider."""
-        from brain import _format_tools_for_provider
+        from llm.brain import _format_tools_for_provider
         
         raw_tools = [
             {"name": "read_file", "description": "Read a file", "parameters": {}}
@@ -393,7 +394,7 @@ class TestFormatToolsForProvider:
         {"type": "function", "function": {...}}, and brain.py should
         detect this and not wrap again (which caused Empty choices error).
         """
-        from brain import _format_tools_for_provider
+        from llm.brain import _format_tools_for_provider
         
         pre_wrapped_tools = [
             {"type": "function", "function": {"name": "read_file", "description": "Read a file", "parameters": {}}}
@@ -411,7 +412,7 @@ class TestFormatToolsForProvider:
 
     def test_ollama_tools_pass_through_unwrapped(self):
         """Ollama receives tools as-is (unwrapped)."""
-        from brain import _format_tools_for_provider
+        from llm.brain import _format_tools_for_provider
         
         raw_tools = [
             {"name": "read_file", "description": "Read a file", "parameters": {}}
@@ -423,7 +424,7 @@ class TestFormatToolsForProvider:
 
     def test_openai_provider_uses_standard_format(self):
         """OpenAI provider uses standard unwrapped format."""
-        from brain import _format_tools_for_provider
+        from llm.brain import _format_tools_for_provider
         
         raw_tools = [
             {"name": "bash", "description": "Run command", "parameters": {}}
@@ -435,14 +436,14 @@ class TestFormatToolsForProvider:
 
     def test_empty_tools_returns_none(self):
         """Empty tools list returns None."""
-        from brain import _format_tools_for_provider
+        from llm.brain import _format_tools_for_provider
         
         assert _format_tools_for_provider([], "minimax") is None
         assert _format_tools_for_provider(None, "minimax") is None
 
     def test_openrouter_provider_uses_standard_format(self):
         """OpenRouter provider uses standard format."""
-        from brain import _format_tools_for_provider
+        from llm.brain import _format_tools_for_provider
         
         raw_tools = [
             {"name": "read_file", "description": "Read", "parameters": {}}
