@@ -74,7 +74,7 @@ class ConversationHistory:
                 text=last_msg["content"],
                 has_tool_calls=True
             ):
-                from response import RepetitionError
+                from llm.response import RepetitionError
                 raise RepetitionError("LLM repetition detected")
 
     @staticmethod

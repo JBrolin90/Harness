@@ -13,7 +13,7 @@ Let me check the controller flow more carefully and see if there's any path wher
 import sys
 sys.path.insert(0, '/home/joachim/lab/prj/Harness')
 
-from response import LLMResponse, ToolCall
+from llm.response import LLMResponse, ToolCall
 from tool_dispatch import dispatch, _safe_dispatch
 
 # Monkey-patch _safe_dispatch to trace calls

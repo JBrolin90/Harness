@@ -12,7 +12,7 @@ from tool_dispatch import (
     _parse_simple_tool_json,
     _parse_json_raw,
 )
-from response import LLMResponse, ToolCall
+from llm.response import LLMResponse, ToolCall
 
 # Clear and set up a mock bash tool
 from tools.base_tool import BaseTool

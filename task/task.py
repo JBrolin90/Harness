@@ -2,7 +2,7 @@
 from task.constants import NO_TEXT_RESPONSE
 from task.execute_tools import ExecuteTools
 from session.conversation_history import ConversationHistory
-from response import LLMResponse, ToolCall, ToolResult, SystemError, RepetitionError
+from llm.response import LLMResponse, ToolCall, ToolResult, SystemError, RepetitionError
 
 
 class Task:
