@@ -1,14 +1,14 @@
 # Harness Project
 
-## Current Branch: merge-brain
+## Current Branch: main (dev is up-to-date)
 
-## Merge Status (2026-06-07)
+## Release0.4.0 (2026-06-07)
 
 ### Branches Merged
 - `dev-Laptop` → bugfixes and improvements
 - `dev-Desktop` → heavy refactoring (via `refactor/brain-py-improvements`)
 
-### What's Preserved
+### What's Included
 
 **From dev-Laptop:**
 - `logger.py` + `test_logger.py` — structured logging system
@@ -25,11 +25,12 @@
   - `llm/response.py` — response types
   - `llm/provider.py` — provider config with `ProviderType` enum
 
-### Known Issues
-- `tests/test_llm_compatibility.py` has pre-existing import error (`build_system_prompt` not found in `systemprompt.py`)
-
 ### Bug Fixes
 - **tool_call_id not extracted**: Fixed `llm/tool_call_parser.py` to extract and pass `id` field from tool calls. MiniMax requires this for tool result messages.
+- **empty choices array**: Fixed `llm/brain.py` to handle empty choices gracefully instead of returning error.
+
+### Known Issues
+- `tests/test_llm_compatibility.py` has pre-existing import error (`build_system_prompt` not found in `systemprompt.py`)
 
 ### Directory Structure
 ```
