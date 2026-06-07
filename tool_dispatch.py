@@ -136,14 +136,26 @@ def _parse_plain_tool_call(text: str) -> dict | None:
 
 
 def extract_json_string(text: str) -> dict | None:
-    """Parse JSON inside ```json ... ```."""
+    """Parse JSON inside ```json ... ```.
+    
+    Handles formats:
+    - {"name": "tool_name", "arguments": {...}}
+    - {"tool": "tool_name", ...} - remaining fields become arguments
+    """
     m = re.search(r'```json\s*\n?(.*?)\n?```', text.strip(), re.DOTALL)
     if not m:
         return None
     try:
         data = json.loads(m.group(1).strip())
-        if isinstance(data, dict) and "name" in data:
-            return {"name": data["name"], "arguments": data.get("arguments", {})}
+        if isinstance(data, dict):
+            # Check for {"name": ...} format
+            if "name" in data:
+                return {"name": data["name"], "arguments": data.get("arguments", {})}
+            # Check for {"tool": ...} format - remaining fields become arguments
+            if "tool" in data:
+                tool_name = data["tool"]
+                args = {k: v for k, v in data.items() if k != "tool"}
+                return {"name": tool_name, "arguments": args}
     except json.JSONDecodeError:
         pass
     return None
@@ -171,14 +183,23 @@ def parse_bash_command(text: str) -> dict | None:
 
 
 def _parse_simple_tool_json(text: str) -> dict | None:
-    """Parse {"tool": "name", "args": {...}}."""
+    """Parse {"tool": "name", ...} or {"tool": "name", "args": {...}}.
+    
+    Handles formats:
+    - {"tool": "name", "args": {...}} - explicit args
+    - {"tool": "name", "arg1": val1, "arg2": val2} - direct fields as args
+    """
     try:
         data = json.loads(text.strip())
-        if isinstance(data, dict):
-            if "tool" in data and "args" in data:
-                return {"name": data["tool"], "arguments": data["args"]}
-            if "tool" in data:
-                return {"name": data["tool"], "arguments": data.get("args", {})}
+        if isinstance(data, dict) and "tool" in data:
+            tool_name = data["tool"]
+            # If args key exists, use it
+            if "args" in data:
+                return {"name": tool_name, "arguments": data["args"]}
+            # Otherwise, use all other keys as arguments
+            args = {k: v for k, v in data.items() if k != "tool"}
+            if args:
+                return {"name": tool_name, "arguments": args}
     except json.JSONDecodeError:
         pass
     return None
