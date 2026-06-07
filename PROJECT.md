@@ -31,8 +31,9 @@
 - **provider recommendations path**: Fixed `llm/provider.py` to use absolute path.
 - **text parsing not used for local-coder**: Fixed `task/task.py` to use `execute_tools` for text parsing.
 - **JSON parser wrong format**: Fixed `extract_json_string` and `_parse_simple_tool_json` to handle `{"tool": ...}` format.
+- **local-coder wrong URL**: Fixed `llm/provider.py` to use `lmde` instead of `localhost` for local-coder provider.
 
-### Pending Fix (on bugfix/loop-detection)
+### Bug Fixes (merged to dev)
 - **repetition detection for text-based tool calls**: Fixed `task/repetition_detector.py` to extract tool name from JSON text even when `has_tool_calls=False`. Prevents models from getting stuck in loops calling the same tool repeatedly.
 
 ### Known Issues
