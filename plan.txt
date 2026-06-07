@@ -29,6 +29,11 @@
   - Modified `conversation_history.py` to store tool_calls in assistant messages
   - This fixes error 2013: "tool result's tool id not found"
 
+- [x] Fix loop detection for text-based tool calls (2026-06-07)
+  - Fixed `task/repetition_detector.py` to extract tool name from JSON text
+  - Even when `has_tool_calls=False`, JSON tool calls are detected
+  - Prevents models from getting stuck in loops calling the same tool repeatedly
+
 ## Provider Status Summary
 
 | Provider | Tool Calls | Notes |
