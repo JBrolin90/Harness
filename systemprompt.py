@@ -70,6 +70,11 @@ def _build_system_prompt_additions() -> str:
     return "\n".join(additions) if additions else ""
 
 
+def build_system_prompt(memory: "Memory | None" = None, provider_type: str = "minimax", attributes: dict | None = None) -> str:
+    """Public alias for _build_prompt."""
+    return _build_prompt(memory, provider_type, attributes)
+
+
 def _build_prompt(memory: "Memory | None" = None, provider_type: str = "minimax", attributes: dict | None = None) -> str:
     """Build system prompt dynamically from registered tools."""
     tools_section = _build_tools_section()

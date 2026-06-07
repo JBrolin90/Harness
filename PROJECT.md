@@ -1,6 +1,6 @@
 # Harness Project
 
-## Current Branch: dev
+## Current Branch: refactor/llm
 
 ## Release 0.4.0 (2026-06-07)
 
@@ -51,23 +51,25 @@
 - **repetition check before tool execution**: Fixed `task/task.py` to check for repetition BEFORE executing the tool (not after). This prevents the same tool from being executed twice when model repeats the same tool call. Added `skip_check` parameter to `add_tool_result()` to avoid double-recording in the repetition detector.
 
 ### Known Issues
-- `tests/test_llm_compatibility.py` has pre-existing import error (`build_system_prompt` not found in `systemprompt.py`)
 - **local-coder (qwen) model hallucinations**: qwen2.5-coder may hallucinate tool names. See plan.txt for proposed `system_prompt_additions` attribute fix.
 - **Model echoing JSON after tool execution**: After executing a text-based tool call, the model may echo the same JSON back. The repetition detector catches this and breaks the loop, but the result is the JSON text, not the tool execution result. This is a model behavior issue.
 
 ### Directory Structure
 ```
 llm/
-├── brain.py
-├── provider.py
-├── request_builder.py
-├── response.py
-├── retry_handler.py
-└── tool_call_parser.py
+├── brain.py          # Thin orchestrator: consult_llm(), error helpers
+├── message_nav.py    # NEW: dot-notation navigation utility
+├── provider.py       # Config + manager (unchanged)
+├── request_builder.py # HTTP building (unchanged)
+├── response.py       # Response types (unchanged)
+├── retry_handler.py  # HTTP retries (unchanged)
+└── tool_call_parser.py # Tool parsing (unchanged)
 ```
 
 ## Test Status
-- 230 tests passing (excluding `test_llm_compatibility.py`)
+- 251 tests passing (all tests including `test_llm_compatibility.py`)
+- Fixed: `test_llm_compatibility.py` import error (added `build_system_prompt` public alias)
+- New tests: test_message_nav.py (7), test_request_builder.py (6), test_tool_call_parser.py (13)
 - 10 new integration tests in `TestTextBasedToolCalls` class
 - 2 new tests for repetition detection bug (`test_repeated_text_tool_call_only_executes_once`, `test_repeated_tool_call_returns_proper_response`)
 
@@ -81,6 +83,15 @@ llm/
 
 ## Commits (dev)
 - `ffbb5dc` Fix Pylance type errors and remove unused imports (brain.py, provider.py, request_builder.py)
+
+## Refactoring (refactor/llm branch)
+**brain.py SRP/DRY improvements:**
+- Unified `_handle_openai_response` and `_handle_ollama_response` → single `_handle_response()` with ProviderType → message_key mapping
+- Extracted `_navigate_to_message()` → `message_nav.py` for separation of concerns
+- Removed dead code: `_parse_tool_calls()` (unused), `_format_tools_for_provider()` (duplicated RequestBuilder logic)
+- Removed import-inside-function smell from `_format_tools_for_provider`
+- `consult_llm()` now thin orchestrator, delegating to specialized components
+- Error handling consolidated: all errors return `_make_error_response()`
 
 ## Documentation
 - ✅ readme.md updated to reflect current `llm/` package structure
