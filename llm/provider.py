@@ -85,7 +85,7 @@ class ProviderManager:
         self.providers.append(ProviderConfig(
             name="local-coder",
             provider_type=ProviderType.OLLAMA,
-            url="http://localhost:11434/api/chat",
+            url="http://lmde:11434/api/chat",
             model="qwen2.5-coder:7b",
             api_key_env_var="OLLAMA_DUMMY_KEY",
             attributes=local_coder_attrs,
@@ -97,7 +97,10 @@ class ProviderManager:
         Returns:
             Dict mapping provider name -> {notes, attributes}
         """
-        recommendations_path = "provider-recommendations.json"
+        # Use project root (parent of llm/) for consistent path resolution
+        module_dir = os.path.dirname(os.path.abspath(__file__))
+        recommendations_path = os.path.join(module_dir, "..", "provider-recommendations.json")
+        recommendations_path = os.path.normpath(recommendations_path)
         if os.path.exists(recommendations_path):
             try:
                 with open(recommendations_path, "r") as f:
