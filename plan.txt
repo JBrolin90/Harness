@@ -99,3 +99,20 @@ Created `provider-recommendations.json` with recommended attributes for each pro
 
 This file provides baseline recommendations that can be applied via `update_provider()`
 or by manually merging into `providers.json`.
+
+## Model Behavior Issues
+
+### qwen2.5-coder tool hallucinations
+qwen2.5-coder may hallucinate tool names like `tool_response`. This is a model behavior issue, not a code bug.
+
+**Potential fix**: Add a `system_prompt_additions` attribute to `provider-recommendations.json` that appends to the system prompt. For example:
+```json
+{
+  "name": "local-coder",
+  "attributes": {
+    "system_prompt_additions": "Only use these exact tool names: read_file, write_file, edit_file, list_files, bash, get_model_name, config_reader, memory, memory_read. Never invent or guess tool names."
+  }
+}
+```
+
+The `SystemPromptManager` would need to be updated to append `system_prompt_additions` to the generated prompt when present.
