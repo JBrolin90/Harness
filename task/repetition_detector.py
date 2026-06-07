@@ -43,19 +43,25 @@ class RepetitionDetector:
         return False
 
     def check_after_tool_result(self, text: str, has_tool_calls: bool) -> bool:
-        """Check if the current action is repetitive after a tool result."""
+        """Check if the current action is repetitive after a tool result.
+        
+        For text-based tool calls (JSON output), we extract the tool name even if
+        has_tool_calls is False, to properly detect repeated tool calls.
+        """
         action_sig = self._compute_signature_from_text(text, has_tool_calls)
         
         # Check if repetitive
         is_rep = False
         if self._has_recorded_action and self._previous is not None:
             prev = self._previous
-            if prev.had_tool_call == has_tool_calls:
-                if has_tool_calls and action_sig and prev.signature == action_sig:
+            # Check repetition if we have a valid signature
+            if action_sig and prev.signature:
+                if prev.signature == action_sig:
                     is_rep = True
-                elif not has_tool_calls and prev.assistant_text and text:
-                    if text.strip() == prev.assistant_text.strip():
-                        is_rep = True
+            # Also check for repeated text without tool calls
+            elif not has_tool_calls and prev.assistant_text and text:
+                if text.strip() == prev.assistant_text.strip():
+                    is_rep = True
         
         # Record current
         self._previous = ActionSignature(action_sig, text, has_tool_calls)
@@ -64,19 +70,32 @@ class RepetitionDetector:
         return is_rep
 
     def _compute_signature_from_text(self, text: str, has_tool_calls: bool) -> str | None:
-        """Compute signature from text (for already-cleaned messages)."""
+        """Compute signature from text (for already-cleaned messages).
+        
+        Even if has_tool_calls is False, if the text looks like a JSON tool call,
+        extract the tool name to enable repetition detection for text-based tool calls.
+        """
         if not text:
             return None
         
-        # If text looks like JSON, use it as signature
-        if has_tool_calls:
-            import re
+        import re
+        # Try to find JSON object in text
+        json_match = re.search(r'\{[^{}]*"name"[^}]*\}', text)
+        if not json_match:
             json_match = re.search(r'\{[^}]+\}', text)
-            if json_match:
-                try:
-                    return json.dumps(json.loads(json_match.group()))
-                except json.JSONDecodeError:
-                    pass
+        
+        if json_match:
+            try:
+                parsed = json.loads(json_match.group())
+                # Extract tool name for signature
+                if isinstance(parsed, dict):
+                    tool_name = parsed.get('name') or parsed.get('tool')
+                    if tool_name:
+                        return tool_name
+                    # If no name, use the whole JSON as signature
+                    return json.dumps(parsed)
+            except json.JSONDecodeError:
+                pass
         
         return None
 
