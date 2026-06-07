@@ -28,6 +28,7 @@
 ### Bug Fixes
 - **tool_call_id not extracted**: Fixed `llm/tool_call_parser.py` to extract and pass `id` field from tool calls. MiniMax requires this for tool result messages.
 - **empty choices array**: Fixed `llm/brain.py` to handle empty choices gracefully instead of returning error.
+- **provider recommendations path**: Fixed `llm/provider.py` to use absolute path for `provider-recommendations.json` instead of relative path.
 
 ### Known Issues
 - `tests/test_llm_compatibility.py` has pre-existing import error (`build_system_prompt` not found in `systemprompt.py`)
