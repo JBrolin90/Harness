@@ -4,7 +4,7 @@ import requests
 
 from .provider import ProviderConfig, ProviderType
 from .request_builder import RequestBuilder
-from .tool_call_parser import get_parser, TopLevelFunctionCallParser, MultiFormatParser
+from .tool_call_parser import get_parser, MultiFormatParser
 from .retry_handler import RetryHandler
 from .response import LLMResponse, ToolCall
 
@@ -38,9 +38,9 @@ def _format_tools_for_provider(tools: list, provider_type: ProviderType | str) -
     return builder._format_tools_for_provider(tools)
 
 
-def _extract_text_content(message: dict | None) -> str:
+def _extract_text_content(message: dict | str | None) -> str:
     """Safely extract text content from a message dict."""
-    if message is None:
+    if message is None or isinstance(message, str):
         return ""
     return message.get('content', "") or ""
 
@@ -129,7 +129,7 @@ def _check_truncation(data: dict, tool_calls: list) -> None:
             print("[BRAIN WARNING: Response may be truncated - finish_reason is 'length' with tool_calls]")
 
 
-def _extract_message_at_path(data: dict, message_key: str, provider_type: str) -> LLMResponse:
+def _extract_message_at_path(data: dict, message_key: str, provider_type: ProviderType | str) -> LLMResponse:
     """Navigate to message and extract content + tool_calls.
     
     Args:

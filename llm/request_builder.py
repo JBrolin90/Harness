@@ -2,7 +2,6 @@
 import os
 
 from .provider import ProviderConfig, ProviderType
-from .response import LLMResponse
 
 
 class RequestBuilder:

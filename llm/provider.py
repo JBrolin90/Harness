@@ -54,7 +54,7 @@ class ProviderManager:
 
     DEFAULT_PROVIDERS: List[str] = ["cloud-pro", "local-coder"]
 
-    def __init__(self, storage_path: str = None):
+    def __init__(self, storage_path: str | None = None):
         if storage_path is None:
             # Default to providers.json in the project root (same dir as provider.py)
             module_dir = os.path.dirname(os.path.abspath(__file__))
