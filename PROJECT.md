@@ -1,6 +1,6 @@
 # Harness Project
 
-## Current Branch: bugfix/text-tool-call-detection (testing)
+## Current Branch: dev
 
 ## Release 0.4.0 (2026-06-07)
 
