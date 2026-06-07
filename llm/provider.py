@@ -85,8 +85,8 @@ class ProviderManager:
         self.providers.append(ProviderConfig(
             name="local-coder",
             provider_type=ProviderType.OLLAMA,
-            url="http://localhost:11434/api/chat",
-            model="qwen2.5-coder:7b",
+            url="http://lmde:11434/api/chat",
+            model="qwen2.5-coder:7b-instruct-q8_0",
             api_key_env_var="OLLAMA_DUMMY_KEY",
             attributes=local_coder_attrs,
         ))

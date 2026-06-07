@@ -4,7 +4,7 @@ from terminal_history import terminal_history_upgrade
 from task.constants import NO_TEXT_RESPONSE
 from logger import setup_debug_logging
 
-VERSION = "0.3.0"
+VERSION = "0.4.0"
 
 
 def main():
