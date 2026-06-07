@@ -79,5 +79,8 @@ llm/
 - Logger.py thread-safety issues (use LoggerAdapter or try/finally)
 - system_prompt_additions attribute for qwen model guidance
 
+## Commits (dev)
+- `ffbb5dc` Fix Pylance type errors and remove unused imports (brain.py, provider.py, request_builder.py)
+
 ## Documentation
 - ✅ readme.md updated to reflect current `llm/` package structure

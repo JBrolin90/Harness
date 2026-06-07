@@ -146,6 +146,9 @@ def _extract_message_at_path(data: dict, message_key: str, provider_type: Provid
     if message is None:
         return _make_error_response(f"Missing '{message_key}' in response")
     
+    if not isinstance(message, dict):
+        return _make_error_response(f"Invalid message type: {type(message).__name__}")
+    
     parser = get_parser(provider_type)
     tool_calls = parser.extract_tool_calls(message)[:MAX_TOOL_CALLS]
     
