@@ -34,6 +34,7 @@
 
 ### Known Issues
 - `tests/test_llm_compatibility.py` has pre-existing import error (`build_system_prompt` not found in `systemprompt.py`)
+- **local-coder (qwen) model hallucinations**: qwen2.5-coder may hallucinate tool names like `tool_response`. This is a model behavior issue, not a code bug. Prompt engineering or model fine-tuning would be needed to resolve it.
 
 ### Directory Structure
 ```
