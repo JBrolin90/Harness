@@ -1,20 +1,25 @@
 # Memory
 ## Personal
-
-### Development Workflow ( Joachim reminded me multiple times - MUST follow )
-1. **Features go on feature branches, not directly on dev**
-   - Create feature branches: `git checkout -b feature/<feature-name>`
-   - Commit changes there, not on dev
-   - This is a clear and established rule that I have failed to follow at least once
-
-2. **Read plan.txt for context** when the user mentions a plan
-
-3. **Check existing branches** before creating new ones
-
-4. **Do not pollute stdout with debug output** - use the debug logging system instead
-
-### Project-Specific
+- Create feature branches: `git checkout -b feature/<feature-name>`
+- Commit changes there, not on dev
+- This is a clear and established rule that I have failed to follow at least once
 - Harness project: /home/joachim/lab/prj/Harness
 - Main branch: main, dev branch: dev
 - Provider config: providers.json
 - Feature branches pattern: feature/<name>
+
+## Knowledge Base
+- - **bob.py**: A script for the Bob-Harness CLI, allowing users to interact with an LLM provider using a command-line interface.
+  - **Purpose**: Facilitates interaction with an LLM provider by managing sessions and processing user input.
+  - **Key Features**:
+    - **Provider Management**: Supports different LLM providers (e.g., cloud-pro).
+    - **Debug Logging**: Enables logging for debugging purposes, which can be configured via command-line arguments or environment variables.
+    - **Session Management**: Handles session initialization and task execution.
+  - **Usage**:
+    ```bash
+    python bob.py --provider <provider-name> [--debug]
+    ```
+  - **Example Usage**:
+    ```bash
+    python bob.py --provider cloud-pro --debug
+    ```

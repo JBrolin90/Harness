@@ -149,14 +149,76 @@ def extract_json_string(text: str) -> dict | None:
     return None
 
 
+def _find_json_in_text(text: str) -> dict | None:
+    """Find and parse a JSON object embedded in text.
+    
+    Uses bracket counting to handle nested JSON objects.
+    Handles cases where model outputs text like: 'Here's the tool: {"name": ...}'
+    without code fences.
+    """
+    # Bracket counting approach to find JSON objects
+    depth = 0
+    start = None
+    in_string = False
+    escape_next = False
+    
+    for i, c in enumerate(text):
+        if escape_next:
+            escape_next = False
+            continue
+        if c == '\\':
+            escape_next = True
+            continue
+        if c == '"' and not escape_next:
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+            
+        if c == '{':
+            if depth == 0:
+                start = i
+            depth += 1
+        elif c == '}':
+            depth -= 1
+            if depth == 0 and start is not None:
+                try:
+                    candidate = text[start:i+1]
+                    data = json.loads(candidate)
+                    if isinstance(data, dict) and ('name' in data or 'tool' in data):
+                        return data
+                except json.JSONDecodeError:
+                    pass
+                start = None
+    
+    return None
+
+
 def _parse_json_raw(text: str) -> dict | None:
-    """Parse bare JSON object."""
+    """Parse bare JSON object or find JSON in text."""
+    # First try to parse entire text as JSON
     try:
         data = json.loads(text.strip())
         if isinstance(data, dict) and "name" in data:
             return {"name": data["name"], "arguments": data.get("arguments", {})}
     except json.JSONDecodeError:
         pass
+    
+    # If that fails, try to find JSON object embedded in text
+    data = _find_json_in_text(text)
+    if data:
+        if "name" in data:
+            return {"name": data["name"], "arguments": data.get("arguments", {})}
+        if "tool" in data:
+            tool_name = data["tool"]
+            if "args" in data:
+                return {"name": tool_name, "arguments": data["args"]}
+            if "arguments" in data:
+                return {"name": tool_name, "arguments": data["arguments"]}
+            # Use remaining fields as arguments
+            args = {k: v for k, v in data.items() if k != "tool"}
+            return {"name": tool_name, "arguments": args}
+    
     return None
 
 
@@ -171,14 +233,20 @@ def parse_bash_command(text: str) -> dict | None:
 
 
 def _parse_simple_tool_json(text: str) -> dict | None:
-    """Parse {"tool": "name", "args": {...}}."""
+    """Parse {"tool": "name", "args": {...}} or {"tool": "name", "arguments": {...}}."""
     try:
         data = json.loads(text.strip())
-        if isinstance(data, dict):
-            if "tool" in data and "args" in data:
-                return {"name": data["tool"], "arguments": data["args"]}
-            if "tool" in data:
-                return {"name": data["tool"], "arguments": data.get("args", {})}
+        if isinstance(data, dict) and "tool" in data:
+            tool_name = data["tool"]
+            # Check for args or arguments key
+            if "args" in data:
+                return {"name": tool_name, "arguments": data["args"]}
+            if "arguments" in data:
+                return {"name": tool_name, "arguments": data["arguments"]}
+            # Otherwise, use all other keys as arguments
+            args = {k: v for k, v in data.items() if k != "tool"}
+            if args:
+                return {"name": tool_name, "arguments": args}
     except json.JSONDecodeError:
         pass
     return None

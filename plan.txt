@@ -66,6 +66,11 @@ a new execution round must be initiated by the user or controller.
 - Text responses (including JSON in ```json ``` blocks, ```bash blocks, etc.) are NOT parsed as commands
 - This cleanly reveals which models properly support structured tool calling
 
+**Text Parsing Enabled (local-coder/qwen):**
+- `dispatch_with_text_parsing` handles text-based tool calls from models that don't use structured tool_calls
+- After executing a text-based tool, if the model echoes the JSON back in its response, the repetition detector catches this and breaks the loop
+- This is expected behavior - the model should not echo back what it executed
+
 **Test Results:**
 - **gemma4:e4b (ollama)**: ✅ Uses structured `tool_calls` correctly
 - **qwen2.5-coder:14b (ollama)**: ❌ Puts JSON in text format, not structured tool_calls
@@ -96,6 +101,7 @@ without forcing all text parsing on or off for a given provider.
 Created `provider-recommendations.json` with recommended attributes for each provider:
 
 - **Cloud models** (MiniMax, OpenRouter): `enable_small_model_guidance: false`
+  - **CRITICAL**: Do NOT enable text parsing for cloud models. They properly use structured `tool_calls`. If they accidentally output text that looks like a tool call, it is NOT their intention to execute it.
 - **Ollama models that work with structured tool_calls** (gemma4): no text parsing needed
 - **Ollama models that don't use structured tool_calls** (qwen2.5-coder variants): 
   enable `text_parse_json_codeblock` and `text_parse_json_raw`

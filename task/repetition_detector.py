@@ -59,7 +59,8 @@ class RepetitionDetector:
                 if prev.signature == action_sig:
                     is_rep = True
             # Also check for repeated text without tool calls
-            elif not has_tool_calls and prev.assistant_text and text:
+            # But only if had_tool_call status is the same (not switching between structured/text)
+            elif not has_tool_calls and prev.had_tool_call == has_tool_calls and prev.assistant_text and text:
                 if text.strip() == prev.assistant_text.strip():
                     is_rep = True
         
@@ -70,32 +71,52 @@ class RepetitionDetector:
         return is_rep
 
     def _compute_signature_from_text(self, text: str, has_tool_calls: bool) -> str | None:
-        """Compute signature from text (for already-cleaned messages).
+        """Compute signature from text (for already cleaned messages).
         
-        Even if has_tool_calls is False, if the text looks like a JSON tool call,
-        extract the tool name to enable repetition detection for text-based tool calls.
+        Uses bracket counting to find the full JSON object, handling nested objects.
+        Extracts the tool name for signature.
         """
         if not text:
             return None
         
         import re
-        # Try to find JSON object in text
-        json_match = re.search(r'\{[^{}]*"name"[^}]*\}', text)
-        if not json_match:
-            json_match = re.search(r'\{[^}]+\}', text)
+        # Use bracket counting to find JSON objects (handles nesting)
+        depth = 0
+        start = None
+        in_string = False
+        escape_next = False
         
-        if json_match:
-            try:
-                parsed = json.loads(json_match.group())
-                # Extract tool name for signature
-                if isinstance(parsed, dict):
-                    tool_name = parsed.get('name') or parsed.get('tool')
-                    if tool_name:
-                        return tool_name
-                    # If no name, use the whole JSON as signature
-                    return json.dumps(parsed)
-            except json.JSONDecodeError:
-                pass
+        for i, c in enumerate(text):
+            if escape_next:
+                escape_next = False
+                continue
+            if c == '\\':
+                escape_next = True
+                continue
+            if c == '"' and not escape_next:
+                in_string = not in_string
+                continue
+            if in_string:
+                continue
+            
+            if c == '{':
+                if depth == 0:
+                    start = i
+                depth += 1
+            elif c == '}':
+                depth -= 1
+                if depth == 0 and start is not None:
+                    try:
+                        parsed = json.loads(text[start:i+1])
+                        if isinstance(parsed, dict):
+                            tool_name = parsed.get('name') or parsed.get('tool')
+                            if tool_name:
+                                return tool_name
+                            # If no name, use the whole JSON as signature
+                            return json.dumps(parsed)
+                    except json.JSONDecodeError:
+                        pass
+                    start = None
         
         return None
 

@@ -2,7 +2,7 @@
 from task.constants import NO_TEXT_RESPONSE
 from task.execute_tools import ExecuteTools
 from session.conversation_history import ConversationHistory
-from llm.response import LLMResponse, ToolCall, ToolResult, SystemError, RepetitionError
+from llm.response import LLMResponse, ToolResult, SystemError, NoToolFound, RepetitionError
 
 
 class Task:
@@ -18,6 +18,7 @@ class Task:
         self.conversation.add_user_message(prompt)
 
         iteration = 0
+        broke_due_to_repetition = False
         while iteration < self.max_iterations:
             iteration += 1
             response = consult_llm(self.conversation.messages, system_prompt, self._provider)
@@ -25,18 +26,45 @@ class Task:
             if response.error:
                 return f"[Error: {response.error}]"
             
-            # Convert ToolCall objects to dicts for API message format
+            # Add response to conversation (for potential tool calls in text format)
             tool_calls_dicts = [tc.to_dict() for tc in response.tool_calls]
             self.conversation.add_model_response(response.text, tool_calls=tool_calls_dicts)
 
-            if not response.has_tool_calls:
-                return response.text
+            # Check for repetition BEFORE executing the tool
+            # This prevents executing the same tool call twice
+            last_msg = next((m for m in reversed(self.conversation.messages) if m["role"] == "assistant"), None)
+            if last_msg:
+                if self.conversation._repetition_detector.check_after_tool_result(
+                    text=last_msg.get("content", ""),
+                    has_tool_calls=bool(response.tool_calls)
+                ):
+                    # Repetition detected - break without executing the tool
+                    broke_due_to_repetition = True
+                    break
 
-            # Execute tool(s) and continue loop
-            try:
-                self._handle_tools(response)
-            except RepetitionError:
-                break
+            # Use execute_tools (dispatch or dispatch_with_text_parsing) to handle response
+            # This properly handles both structured tool calls AND text-based tool calls
+            result = self.execute_tools(response)
+            
+            if isinstance(result, SystemError):
+                return f"[Error: {result}]"
+            
+            if isinstance(result, NoToolFound):
+                # No tool call found - return the text response
+                return response.text
+            
+            # Tool was executed - add result and continue loop
+            # skip_check=True because we already did the repetition check pre-execution
+            # This avoids double-recording in the repetition detector
+            self.conversation.add_tool_result(result, has_tool_calls=bool(response.tool_calls), skip_check=True)
+
+        # Exit loop - handle repetition case specially
+        if broke_due_to_repetition:
+            # When repetition detected, the last assistant message is the repeated tool call
+            # which is not useful content. Remove it and return a repetition message.
+            if self.conversation.history and self.conversation.history[-1]["role"] == "assistant":
+                self.conversation.history.pop()
+            return "[Repetition detected - model repeated the same tool call. Please try again with a different approach.]"
 
         # Exit loop without final response - use last assistant message from history
         messages = self.conversation.messages
@@ -46,27 +74,3 @@ class Task:
                 return msg["content"]
         
         return NO_TEXT_RESPONSE
-    
-    def _handle_tools(self, response: LLMResponse) -> None:
-        """Handle all tool call(s) from LLM response. Raises RepetitionError if detected."""
-        for tc in response.tool_calls:
-            result = self._execute_tool(tc)
-            if isinstance(result, SystemError):
-                break
-            self.conversation.add_tool_result(result)
-    
-    def _execute_tool(self, tc: ToolCall) -> ToolResult | SystemError:
-        """Execute a single tool call and return the result."""
-        print(f"\n[🔧 Harness executing: {tc.name}]")
-        try:
-            from tools.base_tool import BaseTool
-            output = BaseTool.dispatch(tc.name, tc.arguments)
-        except (TypeError, KeyError, ValueError) as e:
-            return SystemError(f"[SYSTEM ERROR: Invalid arguments for '{tc.name}': {e}]")
-        except Exception as e:
-            return SystemError(f"[SYSTEM ERROR: Unexpected error in '{tc.name}': {e}]")
-        
-        if output.startswith("[SYSTEM ERROR"):
-            return SystemError(output)
-        
-        return ToolResult(tool_name=tc.name, output=output, tool_call_id=tc.id)

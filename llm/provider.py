@@ -151,7 +151,7 @@ class ProviderManager:
                     self.save_to_disk()
                 else:
                     print(f"[NOTE: Changes to default provider '{name}' are not persisted.]")
-                    print(f"       Use add_provider() with a custom name to persist changes.")
+                    print("       Use add_provider() with a custom name to persist changes.")
                 return True
         return False
 

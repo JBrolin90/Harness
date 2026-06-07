@@ -52,8 +52,16 @@ class ConversationHistory:
         else:
             self.add_assistant_message(cleaned if cleaned else "", tool_calls=tool_calls)
 
-    def add_tool_result(self, result) -> None:
-        """Add tool result to conversation history. Raises RepetitionError if LLM is repeating."""
+    def add_tool_result(self, result, has_tool_calls: bool = False, skip_check: bool = False) -> None:
+        """Add tool result to conversation history. Raises RepetitionError if LLM is repeating.
+        
+        Args:
+            result: The tool result to add.
+            has_tool_calls: Whether the original response had structured tool_calls.
+                           This is used for repetition detection - text-based tool calls
+                           should use False even though the tool was executed.
+            skip_check: If True, skip the repetition check (used when check was done pre-execution).
+        """
         match result:
             case _ if hasattr(result, 'tool_name') and hasattr(result, 'output'):
                 result_str = str(result.output) if result.tool_name == "system" else f"Observation: {str(result.output)}"
@@ -68,11 +76,18 @@ class ConversationHistory:
         self.add_tool_result_message(result_str, tool_call_id=tool_id)
         
         # Check last assistant message for repetition
+        # Note: has_tool_calls should be False for text-based tool calls even though
+        # a tool was executed, because the assistant message contains raw JSON text
+        # rather than structured tool_calls
+        # Skip check if already done pre-execution (to avoid double-recording)
+        if skip_check:
+            return
+            
         last_msg = next((m for m in reversed(self.history) if m["role"] == "assistant"), None)
         if last_msg:
             if self._repetition_detector.check_after_tool_result(
                 text=last_msg["content"],
-                has_tool_calls=True
+                has_tool_calls=has_tool_calls
             ):
                 from llm.response import RepetitionError
                 raise RepetitionError("LLM repetition detected")
