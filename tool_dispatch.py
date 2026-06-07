@@ -127,8 +127,8 @@ def _parse_plain_tool_call(text: str) -> dict | None:
     tool_name = m.group(1)
     inner = m.group(2).strip()
 
-    if tool_name in {"get_model_name", "list_loaded_tools"}:
-        return {"name": tool_name, "arguments": {}}
+    if tool_name in {"get_model_name", "list_loaded_tools", "tool_request", "tool_response"}:
+        return None  # Skip meta-terms used by models to echo tool calls
 
     # Use first argument value as single argument (e.g., <bash>ls -la</bash>)
     # Parameter name will be normalized by _safe_dispatch → _normalize_arguments
@@ -325,7 +325,7 @@ def dispatch(response: LLMResponse) -> ToolResult | SystemError | NoToolFound:
     if response.has_tool_calls:
         tc = response.first_tool_call
         if tc:
-            return _execute_call(tc.name, tc.arguments)
+            return _execute_call(tc.name, tc.arguments, tc.id)
 
     # No text parsing - large models should use structured tool calls
     return NoToolFound()
@@ -376,7 +376,7 @@ def dispatch_with_text_parsing(response: LLMResponse) -> ToolResult | SystemErro
     return NoToolFound()
 
 
-def _execute_call(tool_name: str, arguments: dict) -> ToolResult | SystemError:
+def _execute_call(tool_name: str, arguments: dict, tool_call_id: str = "") -> ToolResult | SystemError:
     """Internal helper to execute a tool and wrap the result."""
     if is_debug_enabled():
         debug(f"Executing tool: {tool_name} with args: {json.dumps(arguments)}", module="tool_dispatch")
@@ -399,7 +399,7 @@ def _execute_call(tool_name: str, arguments: dict) -> ToolResult | SystemError:
     if is_debug_enabled():
         debug(f"Tool '{tool_name}' completed successfully, output length: {len(output)}", module="tool_dispatch")
 
-    return ToolResult(tool_name, output)
+    return ToolResult(tool_name, output, tool_call_id=tool_call_id)
 
 
 def dispatch_iteration(responses: list[LLMResponse]) -> list[ToolResult | SystemError | NoToolFound]:

@@ -7,7 +7,7 @@ from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'llm'))
 
-from llm.brain import _extract_text_content, _handle_response, consult_llm
+from llm.brain import _extract_text_content, _normalize_response, consult_llm
 from llm.response import LLMResponse, ToolCall
 from llm.provider import ProviderType
 
@@ -32,8 +32,8 @@ class TestExtractTextContent:
         assert _extract_text_content({"content": None}) == ""
 
 
-class TestHandleResponse:
-    """Tests for unified _handle_response function."""
+class TestNormalizeResponse:
+    """Tests for unified _normalize_response function."""
 
     def test_text_only_response_openai_style(self):
         """Simple text response with no tool call."""
@@ -44,7 +44,7 @@ class TestHandleResponse:
                 }
             }]
         }
-        result = _handle_response(data, ProviderType.OPENAI)
+        result = _normalize_response(data, ProviderType.OPENAI)
         assert isinstance(result, LLMResponse)
         assert result.text == "Hello, how can I help you?"
         assert result.tool_calls == []
@@ -65,7 +65,7 @@ class TestHandleResponse:
                 }
             }]
         }
-        result = _handle_response(data, ProviderType.OPENAI)
+        result = _normalize_response(data, ProviderType.OPENAI)
         assert isinstance(result, LLMResponse)
         assert len(result.tool_calls) == 1
         assert result.tool_calls[0].name == "read_file"
@@ -73,13 +73,13 @@ class TestHandleResponse:
 
     def test_missing_choices_key(self):
         """Missing choices key returns error response."""
-        result = _handle_response({}, ProviderType.OPENAI)
+        result = _normalize_response({}, ProviderType.OPENAI)
         assert isinstance(result, LLMResponse)
         assert result.error is not None
 
     def test_empty_choices_array(self):
         """"Empty choices array returns empty response (graceful handling)."""
-        result = _handle_response({"choices": []}, ProviderType.OPENAI)
+        result = _normalize_response({"choices": []}, ProviderType.OPENAI)
         assert isinstance(result, LLMResponse)
         # Empty choices is treated as empty response, not an error
         assert result.text == ""
@@ -88,7 +88,7 @@ class TestHandleResponse:
 
     def test_message_is_none(self):
         """choices[0].message is None returns error response."""
-        result = _handle_response({"choices": [{"message": None}]}, ProviderType.OPENAI)
+        result = _normalize_response({"choices": [{"message": None}]}, ProviderType.OPENAI)
         assert isinstance(result, LLMResponse)
         assert result.error is not None
 
@@ -100,7 +100,7 @@ class TestHandleResponse:
                 "content": "I'm here to help."
             }
         }
-        result = _handle_response(data, ProviderType.OLLAMA)
+        result = _normalize_response(data, ProviderType.OLLAMA)
         assert isinstance(result, LLMResponse)
         assert result.text == "I'm here to help."
 
@@ -118,26 +118,26 @@ class TestHandleResponse:
                 }]
             }
         }
-        result = _handle_response(data, ProviderType.OLLAMA)
+        result = _normalize_response(data, ProviderType.OLLAMA)
         assert isinstance(result, LLMResponse)
         assert len(result.tool_calls) == 1
         assert result.tool_calls[0].name == "read_file"
 
     def test_ollama_missing_message_key(self):
         """Missing message key returns error."""
-        result = _handle_response({}, ProviderType.OLLAMA)
+        result = _normalize_response({}, ProviderType.OLLAMA)
         assert isinstance(result, LLMResponse)
         assert result.error is not None
 
     def test_ollama_message_is_none(self):
         """message is None returns error."""
-        result = _handle_response({"message": None}, ProviderType.OLLAMA)
+        result = _normalize_response({"message": None}, ProviderType.OLLAMA)
         assert isinstance(result, LLMResponse)
         assert result.error is not None
 
     def test_ollama_content_is_none(self):
         """Content is None returns empty text."""
-        result = _handle_response({"message": {"content": None}}, ProviderType.OLLAMA)
+        result = _normalize_response({"message": {"content": None}}, ProviderType.OLLAMA)
         assert isinstance(result, LLMResponse)
         assert result.text == ""
 

@@ -66,7 +66,7 @@ class TestOpenAIStyleParser:
         assert result[0].arguments == {"path": "/etc/hosts"}
 
     def test_tool_call_with_id(self):
-        """Tool call with id field is extracted (if implemented)."""
+        """Tool call with id field is extracted and preserved."""
         parser = OpenAIStyleParser()
         message = {
             "tool_calls": [{
@@ -79,8 +79,8 @@ class TestOpenAIStyleParser:
         }
         result = parser.extract_tool_calls(message)
         assert len(result) == 1
-        # id field may not be extracted by all parsers
         assert result[0].name == "bash"
+        assert result[0].id == "call_abc123", f"Expected id 'call_abc123', got '{result[0].id}'"
 
     def test_arguments_as_json_string(self):
         """Arguments may come as a JSON string that needs parsing."""

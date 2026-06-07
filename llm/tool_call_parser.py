@@ -38,9 +38,9 @@ class ToolCallParser(ABC):
         """
         pass
     
-    def _build_tool_call(self, name: str, arguments: str | dict) -> ToolCall:
-        """Build a ToolCall from name and arguments."""
-        return ToolCall(name=name, arguments=parse_arguments(arguments))
+    def _build_tool_call(self, name: str, arguments: str | dict, tool_id: str = "") -> ToolCall:
+        """Build a ToolCall from name, arguments, and optional id."""
+        return ToolCall(name=name, arguments=parse_arguments(arguments), id=tool_id)
 
 
 class OpenAIStyleParser(ToolCallParser):
@@ -56,6 +56,7 @@ class OpenAIStyleParser(ToolCallParser):
     def _parse_call(self, call: dict) -> ToolCall | None:
         fn = call.get('function', {})
         name = fn.get('name')
+        tool_id = call.get('id', '')
         
         if not name:
             # Fallback: try function_call.name directly
@@ -65,7 +66,7 @@ class OpenAIStyleParser(ToolCallParser):
         if not name:
             return None
         
-        return self._build_tool_call(name, fn.get('arguments', '{}'))
+        return self._build_tool_call(name, fn.get('arguments', '{}'), tool_id)
 
 
 class TopLevelFunctionCallParser(ToolCallParser):
@@ -100,6 +101,7 @@ class OllamaParser(ToolCallParser):
     def _parse_call(self, call: dict) -> ToolCall | None:
         fn = call.get('function', {})
         name = fn.get('name')
+        tool_id = call.get('id', '')
         
         if not name and 'function_call' in call:
             fc = call.get('function_call', {})
@@ -108,7 +110,7 @@ class OllamaParser(ToolCallParser):
         if not name:
             return None
         
-        return self._build_tool_call(name, fn.get('arguments', '{}'))
+        return self._build_tool_call(name, fn.get('arguments', '{}'), tool_id)
 
 
 class MultiFormatParser(ToolCallParser):

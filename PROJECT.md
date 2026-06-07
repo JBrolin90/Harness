@@ -1,6 +1,6 @@
 # Harness Project
 
-## Current Branch: refactor/llm
+## Current Branch: bugfix/tool-call-id
 
 ## Release 0.4.0 (2026-06-07)
 
@@ -67,11 +67,28 @@ llm/
 ```
 
 ## Test Status
-- 251 tests passing (all tests including `test_llm_compatibility.py`)
+- 252 tests passing (all tests including `test_llm_compatibility.py`)
 - Fixed: `test_llm_compatibility.py` import error (added `build_system_prompt` public alias)
 - New tests: test_message_nav.py (7), test_request_builder.py (6), test_tool_call_parser.py (13)
-- 10 new integration tests in `TestTextBasedToolCalls` class
-- 2 new tests for repetition detection bug (`test_repeated_text_tool_call_only_executes_once`, `test_repeated_tool_call_returns_proper_response`)
+- Bugfix tests: `test_tool_call_with_id` (tool_call_parser.py), `test_tool_call_id_passed_through` (tool_dispatch.py)
+
+## Bugfix (bugfix/tool-call-id branch)
+**tool_call_id not propagated through the dispatch chain**
+- `llm/tool_call_parser.py`: Updated `_parse_call()` in `OpenAIStyleParser` and `OllamaParser` to extract and pass `id` field to `_build_tool_call()`
+- `_build_tool_call()` now accepts optional `tool_id` parameter
+- `tool_dispatch.py`: Updated `dispatch()` to pass `tc.id` to `_execute_call()`, and `_execute_call()` now accepts `tool_call_id` parameter
+- Critical for MiniMax which requires `tool_call_id` in responses to properly correlate tool calls with results
+
+## Bugfix (bugfix/tool-call-id branch)
+**tool_call_id not extracted from tool_calls**
+- `llm/tool_call_parser.py`: Updated `_parse_call()` in `OpenAIStyleParser` and `OllamaParser` to extract and pass `id` field
+- `_build_tool_call()` now accepts optional `tool_id` parameter
+- Critical for MiniMax which requires `tool_call_id` in responses
+
+**Model echo causing "Unknown tool" errors**
+- `tool_dispatch.py`: Added `tool_request` and `tool_response` to ignored tools list in `_parse_plain_tool_call()`
+- Models (like qwen) echo back tool calls in `<tool_response>...</tool_response>` format
+- These meta-terms are not actual tools and should be ignored
 
 ## Bob Status
 - ✅ Working correctly with cloud-pro (MiniMax) - structured tool calls only
@@ -86,7 +103,7 @@ llm/
 
 ## Refactoring (refactor/llm branch)
 **brain.py SRP/DRY improvements:**
-- Unified `_handle_openai_response` and `_handle_ollama_response` → single `_handle_response()` with ProviderType → message_key mapping
+- Unified `_handle_openai_response` and `_handle_ollama_response` → single `_normalize_response()` with ProviderType → message_key mapping
 - Extracted `_navigate_to_message()` → `message_nav.py` for separation of concerns
 - Removed dead code: `_parse_tool_calls()` (unused), `_format_tools_for_provider()` (duplicated RequestBuilder logic)
 - Removed import-inside-function smell from `_format_tools_for_provider`

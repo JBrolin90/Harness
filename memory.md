@@ -10,16 +10,11 @@
 
 ## Knowledge Base
 - - **bob.py**: A script for the Bob-Harness CLI, allowing users to interact with an LLM provider using a command-line interface.
-  - **Purpose**: Facilitates interaction with an LLM provider by managing sessions and processing user input.
-  - **Key Features**:
-    - **Provider Management**: Supports different LLM providers (e.g., cloud-pro).
-    - **Debug Logging**: Enables logging for debugging purposes, which can be configured via command-line arguments or environment variables.
-    - **Session Management**: Handles session initialization and task execution.
-  - **Usage**:
-    ```bash
-    python bob.py --provider <provider-name> [--debug]
-    ```
-  - **Example Usage**:
-    ```bash
-    python bob.py --provider cloud-pro --debug
-    ```
+- **Purpose**: Facilitates interaction with an LLM provider by managing sessions and processing user input.
+- **Key Features**:
+- **Provider Management**: Supports different LLM providers (e.g., cloud-pro).
+- **Debug Logging**: Enables logging for debugging purposes, which can be configured via command-line arguments or environment variables.
+- **Session Management**: Handles session initialization and task execution.
+- **Usage**:
+- **Example Usage**:
+- - **Harness**: A project directory containing various files and scripts for managing LLM sessions, including interaction with providers.

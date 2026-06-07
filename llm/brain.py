@@ -45,7 +45,7 @@ def _get_message_key(provider_type: ProviderType) -> str:
     return _MESSAGE_KEYS.get(provider_type, "choices[0].message")
 
 
-def _handle_response(data: dict, provider_type: ProviderType) -> LLMResponse:
+def _normalize_response(data: dict, provider_type: ProviderType) -> LLMResponse:
     """Handle LLM response, extracting text and tool calls.
     
     Args:
@@ -117,7 +117,7 @@ def consult_llm(history: list, system_prompt: str, config: ProviderConfig) -> LL
     try:
         response = _make_request_with_retry(config.url, headers=headers, payload=payload)
         data = response.json()
-        return _handle_response(data, config.provider_type)
+        return _normalize_response(data, config.provider_type)
 
     except requests.HTTPError as e:
         status = e.response.status_code if e.response is not None else "unknown"

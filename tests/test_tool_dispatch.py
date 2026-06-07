@@ -213,6 +213,19 @@ class TestDispatch:
         finally:
             _clear("read_file")
 
+    def test_tool_call_id_passed_through(self):
+        """tool_call_id is passed through from ToolCall to ToolResult."""
+        _mock_tool("read_file", "[OK]")
+        try:
+            tc = ToolCall(name="read_file", arguments={"path": "test.txt"}, id="call_abc123")
+            response = LLMResponse(tool_calls=[tc])
+            r = dispatch(response)
+            assert isinstance(r, ToolResult)
+            assert r.tool_name == "read_file"
+            assert r.tool_call_id == "call_abc123", f"Expected 'call_abc123', got '{r.tool_call_id}'"
+        finally:
+            _clear("read_file")
+
     def test_text_response_no_tool(self):
         """Text response with no tool call returns NoToolFound."""
         response = LLMResponse(text="Hello, how can I help?")

@@ -1,3 +1,8 @@
+# AGENT.md
+
+## DIRECTORY SPECIFIC INSTRUCTIONS (AGENT.md)
+
+This file contains specific instructions for the AGENT directory.
 # Agent Instructions
 
 See [memory_instructions.md](memory_instructions.md) for long-term memory management.
