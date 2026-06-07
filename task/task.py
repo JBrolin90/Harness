@@ -2,7 +2,7 @@
 from task.constants import NO_TEXT_RESPONSE
 from task.execute_tools import ExecuteTools
 from session.conversation_history import ConversationHistory
-from llm.response import LLMResponse, ToolCall, ToolResult, SystemError, RepetitionError
+from llm.response import LLMResponse, ToolCall, ToolResult, SystemError, NoToolFound, RepetitionError
 
 
 class Task:
@@ -25,18 +25,23 @@ class Task:
             if response.error:
                 return f"[Error: {response.error}]"
             
-            # Convert ToolCall objects to dicts for API message format
+            # Add response to conversation (for potential tool calls in text format)
             tool_calls_dicts = [tc.to_dict() for tc in response.tool_calls]
             self.conversation.add_model_response(response.text, tool_calls=tool_calls_dicts)
 
-            if not response.has_tool_calls:
+            # Use execute_tools (dispatch or dispatch_with_text_parsing) to handle response
+            # This properly handles both structured tool calls AND text-based tool calls
+            result = self.execute_tools(response)
+            
+            if isinstance(result, SystemError):
+                return f"[Error: {result}]"
+            
+            if isinstance(result, NoToolFound):
+                # No tool call found - return the text response
                 return response.text
-
-            # Execute tool(s) and continue loop
-            try:
-                self._handle_tools(response)
-            except RepetitionError:
-                break
+            
+            # Tool was executed - add result and continue loop
+            self.conversation.add_tool_result(result)
 
         # Exit loop without final response - use last assistant message from history
         messages = self.conversation.messages
@@ -46,27 +51,3 @@ class Task:
                 return msg["content"]
         
         return NO_TEXT_RESPONSE
-    
-    def _handle_tools(self, response: LLMResponse) -> None:
-        """Handle all tool call(s) from LLM response. Raises RepetitionError if detected."""
-        for tc in response.tool_calls:
-            result = self._execute_tool(tc)
-            if isinstance(result, SystemError):
-                break
-            self.conversation.add_tool_result(result)
-    
-    def _execute_tool(self, tc: ToolCall) -> ToolResult | SystemError:
-        """Execute a single tool call and return the result."""
-        print(f"\n[🔧 Harness executing: {tc.name}]")
-        try:
-            from tools.base_tool import BaseTool
-            output = BaseTool.dispatch(tc.name, tc.arguments)
-        except (TypeError, KeyError, ValueError) as e:
-            return SystemError(f"[SYSTEM ERROR: Invalid arguments for '{tc.name}': {e}]")
-        except Exception as e:
-            return SystemError(f"[SYSTEM ERROR: Unexpected error in '{tc.name}': {e}]")
-        
-        if output.startswith("[SYSTEM ERROR"):
-            return SystemError(output)
-        
-        return ToolResult(tool_name=tc.name, output=output, tool_call_id=tc.id)

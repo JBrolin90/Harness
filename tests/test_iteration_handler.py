@@ -135,12 +135,13 @@ class TestTask:
 
     def test_execute_no_tool_call(self, mock_provider, mock_execute_tools):
         """run should return text immediately if no tool call."""
-        from llm.response import LLMResponse
+        from llm.response import LLMResponse, NoToolFound
         
         handler = Task(mock_execute_tools)
         
         mock_response = LLMResponse(text="I can help with that.")
         custom_consult_llm = MagicMock(return_value=mock_response)
+        mock_execute_tools.return_value = NoToolFound()
         
         result = handler.run("Hello", "System prompt", custom_consult_llm, mock_provider)
         
@@ -182,9 +183,10 @@ class TestTaskIntegration:
 
     def test_execute_accumulates_in_conversation(self, mock_provider):
         """run should add messages to conversation."""
-        from llm.response import LLMResponse
+        from llm.response import LLMResponse, NoToolFound
         
         handler = Task(MagicMock())
+        handler.execute_tools = MagicMock(return_value=NoToolFound())
         
         mock_response = LLMResponse(text="Response text")
         custom_consult_llm = MagicMock(return_value=mock_response)
