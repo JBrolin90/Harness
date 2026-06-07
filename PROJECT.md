@@ -30,6 +30,7 @@
 - **empty choices array**: Fixed `llm/brain.py` to handle empty choices gracefully instead of returning error.
 - **provider recommendations path**: Fixed `llm/provider.py` to use absolute path for `provider-recommendations.json` instead of relative path.
 - **text parsing not used for local-coder**: Fixed `task/task.py` to use `execute_tools` (dispatch_with_text_parsing) instead of checking `response.has_tool_calls` directly. This enables text-based tool calls for providers like local-coder (qwen).
+- **JSON parser wrong format**: Fixed `extract_json_string` and `_parse_simple_tool_json` in `tool_dispatch.py` to handle `{"tool": "name", "field": value}` format. Qwen models output this format where remaining fields become arguments.
 
 ### Known Issues
 - `tests/test_llm_compatibility.py` has pre-existing import error (`build_system_prompt` not found in `systemprompt.py`)
